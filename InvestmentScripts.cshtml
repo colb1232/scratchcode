@@ -1,0 +1,562 @@
+﻿@model IPublishedContent
+@{ 
+    var m = Model;
+    string address = (string)ViewData["address"];
+    string city = (string)ViewData["city"];
+    string state = (string)ViewData["state"];
+    string zipCode = (string)ViewData["zipCode"];
+    string phone = (string)ViewData["phone"];
+}
+<script async>
+    var fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+    function getCashAvailableTotal(profileId) {
+        $.ajax('/umbraco/surface/InvestorDashboardForms/GetCashAvailableByProfileId?id=' + profileId,
+            {
+                method: 'GET'
+            })
+            .done(function (data) {
+                var profileTotal = 0;
+                for (var i = 0; i < data.length; i++) {
+                    profileTotal += Number(data[i].Amount);
+                }
+
+                document.getElementById('spCashTotal').innerText = fmt.format(profileTotal);
+                document.getElementById('cashAmount').setAttribute('max', profileTotal);
+                document.getElementById('cashAmount').setAttribute('data-max-amount', profileTotal);
+            });
+    }
+
+    function getCookie(cname) {
+        let name = cname + "=";
+        let decodedCookie = decodeURIComponent(document.cookie);
+        let ca = decodedCookie.split(';');
+        for (let i = 0; i < ca.length; i++) {
+            let c = ca[i];
+            while (c.charAt(0) == ' ') {
+                c = c.substring(1);
+            }
+            if (c.indexOf(name) == 0) {
+                return c.substring(name.length, c.length);
+            }
+        }
+        return "";
+    }
+
+    function setCookie(cname, cvalue, exdays) {
+        const d = new Date();
+        d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000));
+        let expires = "expires=" + d.toUTCString();
+        document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        $('.invest-offering-btn').magnificPopup({
+            items: {
+                src: '#profilePopup'
+            },
+            closeOnBgClick: false,
+            callbacks: {
+                elementParse: function (item) {
+                    var address = "@address";
+                    var city = "@city";
+                    var state = "@state";
+                    var zipCode = "@zipCode";
+                    var phone = "@phone";
+                    // redirect to new register signup form that updates
+                    if (address == "" || city == "" || state == "" || zipCode == "" || phone == "") {
+                        // add the cookie here instead jesse
+                        var BeforeRegistrationCookie = getCookie("BeforeRegistration");
+                        if (BeforeRegistrationCookie == "") {
+                            setCookie("BeforeRegistration", "@m.Id", "1")
+                        }
+                        else {
+                            // if the cookie has a value or exists
+
+                            // we need to just open the investment
+                        }
+                        window.location = "/personal-info-form";
+                    }
+                }
+            }
+        });
+
+        if (document.getElementById('chkAutoInvest') != null) {
+            document.getElementById('chkAutoInvest').addEventListener('change', function (evt) {
+                document.getElementById('monthlyAmountRow').style.display = this.checked ? null : "none";
+            });
+        }
+        document.getElementById('chkCashAmount').addEventListener('change', function (evt) {
+            document.getElementById('cashBalanceAmountRow').style.display = this.checked ? null : "none";
+        });
+        // open the popup if they already opened it in the past
+        var currentOfferingId = "@m.Id";
+        var BeforeRegistrationCookie = getCookie("BeforeRegistration");
+        var returnProfileToOffering = getCookie("returnProfileToOffering");
+
+        if (BeforeRegistrationCookie == currentOfferingId) {
+            $.magnificPopup.open({
+                items: {
+                    src: '#profilePopup'
+                },
+                closeOnBgClick: false
+            });
+
+            setCookie("BeforeRegistration", "", "1") // get rid of the cookie we used it
+        }
+        else if (returnProfileToOffering == currentOfferingId) {
+            $.magnificPopup.open({
+                items: {
+                    src: '#profilePopup'
+                },
+                closeOnBgClick: false
+            });
+
+            setCookie("BeforeRegistration", "", "1") // get rid of the cookie we used it
+        }
+
+        // end open
+        document.getElementById('accountId').addEventListener('change', function () {
+            document.getElementById('bankDetails').style.display = document.getElementById('accountId').value == '' ? null : 'none';
+        });
+
+        var currentProfile = 0;
+        var currentFAProfile = "";
+        var s = document.getElementById('accountId');;
+        // use profile here, make sure they can do it
+        var el = document.querySelectorAll('button.use-profile-btn');
+        for (var i = 0; i < el.length; i++) {
+            el[i].addEventListener('click', function (evt) {
+                var id = this.getAttribute('data-profileid');
+                $.ajax('/umbraco/surface/ProfilesSurface/GetProfileData', {
+                    data: {
+                        profileId: id
+                    },
+                    method: 'GET'
+                }).done(function (data) {
+                    var profileInfo = data;
+
+                    if (profileInfo.Email != "")
+                        profileEmail = profileInfo.Email;
+                    profileName = profileInfo.Nickname;
+                    // if the profile is not individual redirect to the new accreditation questions, and they haven't been asked before
+                    if (profileInfo.ProfileType != "Individual" && profileInfo.AccreditedInvestor == "") {
+                        // also if not accredited
+                        currentProfile = profileInfo.Id;
+                        $.magnificPopup.close(); // close the other one and make them answer the questionaire first
+                        $.magnificPopup.open({
+                            items: {
+                                src: '#questionaireAboutNonIndividual'
+                            },
+                            closeOnBgClick: false,
+                            callbacks: {
+                                open: function () {
+                                },
+                                close: function () {
+                                }
+                            }
+                        });
+                    }
+                    else {
+                        var offeringType = "@m.GetProperty("OfferingType").Value()"
+                        if (offeringType == "Regulation A") {
+
+                            // if not accreditted the 10% thing otherwise whatever you want
+                            if (profileInfo.AccreditedInvestor == "true") {
+                                // no limits
+                                document.getElementById("wireTransferNameInvestor").innerText = profileInfo.Nickname;
+                                // set max
+                                var amountField = document.getElementById("amount");
+                                document.getElementById("profileMaxAmountFundable").innerText = "(No Limit - Accredited)";
+                                $.ajax('/umbraco/surface/OfferingsSurface/GetOfferingTotalInvestedByProfile', {
+                                    data: {
+                                        offeringId: @m.Id,
+                                        profileId: profileInfo.Id
+                                    },
+                                    method: 'GET'
+                                }).done(function (data) {
+                                    var amountPaidByProfile = data;
+
+                                    // new rule they want %10 of the larger amount to be the maximum they can invest
+
+                                    if (amountPaidByProfile >= @(m.GetProperty("minimumInvestment").Value<decimal>().ToString("F0"))) {
+                                        amountField.setAttribute('data-min-amount', "@(m.GetProperty("sharePrice").Value<decimal>().ToString("F0"))");
+                                        amountField.setAttribute('placeholder', "Minimum of @(m.GetProperty("sharePrice").Value<decimal>().ToString("c0")) required in @(m.GetProperty("sharePrice").Value<decimal>().ToString("c0")) amounts");
+                                    }
+                                    document.getElementById("wireTransferNameInvestor").innerText = profileInfo.Nickname;
+
+                                    updateAmountLimits();
+                                });
+                            }
+                            else {
+
+                                var largerAmount = 0;
+                                if (parseFloat(profileInfo.NetWorth) > 0 || parseFloat(profileInfo.Salary) > 0) {
+                                    if (parseFloat(profileInfo.NetWorth) >= parseFloat(profileInfo.Salary)) {
+                                        largerAmount = parseFloat(profileInfo.NetWorth)
+                                    }
+                                    else {
+                                        largerAmount = parseFloat(profileInfo.Salary)
+                                    }
+                                    $.ajax('/umbraco/surface/OfferingsSurface/GetOfferingTotalInvestedByProfile', {
+                                        data: {
+                                            offeringId: @m.Id,
+                                            profileId: profileInfo.Id
+                                        },
+                                        method: 'GET'
+                                    }).done(function (data) {
+                                        var amountPaidByProfile = data;
+
+                                        // new rule they want %10 of the larger amount to be the maximum they can invest
+                                        var percentageAmountAllowed = largerAmount * 0.10;
+                                        var paidAlready = amountPaidByProfile; // needs to filter by offering as well
+
+                                        percentageAmountAllowed = percentageAmountAllowed - parseFloat(paidAlready);
+                                        if (percentageAmountAllowed < 0) {
+                                            percentageAmountAllowed = 0;
+                                        }
+                                        var amountField = document.getElementById("amount");
+                                        // SET THE MAXIMUM AMOUNT
+                                        amountField.setAttribute('data-max-amount', percentageAmountAllowed);
+                                        if (paidAlready >= @(m.GetProperty("minimumInvestment").Value<decimal>().ToString("F0"))) {
+                                            amountField.setAttribute('data-min-amount', "@(m.GetProperty("sharePrice").Value<decimal>().ToString("F0"))");
+                                            amountField.setAttribute('placeholder', "Minimum of @(m.GetProperty("sharePrice").Value<decimal>().ToString("c0")) required in @(m.GetProperty("sharePrice").Value<decimal>().ToString("c0")) amounts");
+                                        }
+                                        document.getElementById("profileMaxAmountFundable").innerText = "$" + parseInt(percentageAmountAllowed).toFixed(2);
+                                        document.getElementById("wireTransferNameInvestor").innerText = profileInfo.Nickname
+
+                                        if (percentageAmountAllowed == 0) {
+                                            alert("You need to update your Net Worth Or Annual Income to a higher amount in order to Invest more in this property. You have already paid 10% of your net worth or salary.");
+                                            // add cookie to say come back here
+                                            window.location.href = "/profiles/profile?profileId=" + profileInfo.Id;
+                                        }
+                                        updateAmountLimits();
+                                    });
+                                }
+                                else {
+                                    // send to set profile amount
+                                    // example /profiles/profile?profileId=5078
+                                    // You need to update your Net Worth Or Annual Income to Invest in this property
+                                    alert("You need to update your Net Worth Or Annual Income to Invest in this property");
+                                    window.location.href = "/profiles/profile?profileId=" + profileInfo.Id + "#originalLocationRef";
+
+                                    // add cookie to say come back here
+                                    window.location.href = "/profiles/profile?profileId=" + profileInfo.Id;
+                                }
+                            }
+                        }
+                        else {
+                            var offeringType = "@m.GetProperty("OfferingType").Value()"
+                            if (offeringType == "Individual Projects") {
+                                document.getElementById("wireTransferNameInvestor").innerText = profileInfo.Nickname;
+                            }
+                        }
+
+                        {
+                            var offeringType = "@m.GetProperty("OfferingType").Value()"
+                            if (offeringType == "Fund") {
+                                document.getElementById("wireTransferNameInvestor").innerText = profileInfo.Nickname;
+                            }
+                        }
+
+                        currentProfile = profileInfo.Id;
+                        currentFAProfile = profileInfo.FundAmericaInvestorId
+
+                        getCashAvailableTotal(currentProfile);
+
+                        s.options.add(new Option('New Account', ''));
+                        $.ajax('/umbraco/api/investorapi/ListAccounts?profileId=' + id, {
+                            method: 'POST'
+                        }).done(function (data) {
+                            for (var i = 0; i < data.length; i++) {
+                                var d = data[i];
+                                s.options.add(new Option(d.BankName
+                                    + ' (∗∗∗∗ '
+                                    + d.AccountNumber.substring(d.AccountNumber.length - 4)
+                                    + ')', d.Id));
+                            }
+
+                        });
+                        $.magnificPopup.open({
+                            items: {
+                                src: '#investPopup'
+                            },
+                            closeOnBgClick: false
+                        });
+                    }
+                });
+            });
+        }
+
+        updateAmountLimits();
+        var amt = document.getElementById('amount');
+        var nameError = document.getElementById('nameError');
+        var bankNameError = document.getElementById('bankNameError');
+        var accountError = document.getElementById('accountError');
+        var confirmError = document.getElementById('confirmAccountError');
+        var routingError = document.getElementById('routingError');
+        var accountIdField = document.getElementById('accountId');
+        var achAgreementsError = document.getElementById('achAgreementsError');
+        var monthlyAmountError = document.getElementById('monthlyAmountError');
+       // var cashAmountError = document.getElementById('cashAmountError');
+        document.getElementById('createAch').addEventListener('click', function () {
+            var account = accountIdField.value;
+            document.getElementById('divAchError').style.display = "none";
+            nameError.classList.replace("field-validation-error", "field-validation-valid");
+            bankNameError.classList.replace("field-validation-error", "field-validation-valid");
+            accountError.classList.replace("field-validation-error", "field-validation-valid");
+            confirmError.classList.replace("field-validation-error", "field-validation-valid");
+            routingError.classList.replace("field-validation-error", "field-validation-valid");
+            achAgreementsError.classList.replace("field-validation-error", "field-validation-valid");
+           // cashAmountError.classList.replace("field-validation-error", "field-validation-valid");
+            var isValid = true;
+
+            if (monthlyAmountError != null)
+                monthlyAmountError.classList.replace("field-validation-error", "field-validation-valid");
+            var autoInvest = false;
+            var monthlyInvestAmt = 0;
+            if (document.getElementById('chkAutoInvest') != null)
+                autoInvest = document.getElementById('chkAutoInvest').checked;
+            if (document.getElementById('monthlyAmount') != null && autoInvest) {
+                monthlyInvestAmt = Number(document.getElementById('monthlyAmount').value);
+                if (isNaN(monthlyInvestAmt)) {
+                    monthlyAmountError.classList.replace("field-validation-valid", "field-validation-error");
+                    monthlyAmountError.innerText = "Please enter a valid amount (numbers only)";
+                    isValid = false;
+                } else if (monthlyInvestAmt % 100 != 0 || monthlyInvestAmt <= 0) {
+                    monthlyAmountError.classList.replace("field-validation-valid", "field-validation-error");
+                    monthlyAmountError.innerText = "Monthly amounts must be positive in increments of $100.";
+                    isValid = false;
+                }
+            }
+            if (account == '') {
+                if (document.getElementById('nameOnAccount').value == "") {
+                    nameError.classList.replace("field-validation-valid", "field-validation-error");
+                    nameError.innerText = "The 'Name on Account' field is required";
+                    isValid = false;
+                }
+                if (document.getElementById('bankName').value == "") {
+                    bankNameError.classList.replace("field-validation-valid", "field-validation-error");
+                    bankNameError.innerText = "The 'Bank Name' field is required";
+                    isValid = false;
+                }
+                if (document.getElementById('accountNumber').value == "") {
+                    accountError.classList.replace("field-validation-valid", "field-validation-error");
+                    accountError.innerText = "The 'Account #' field is required";
+                    isValid = false;
+                }
+                if (document.getElementById('confirmAccountNumber').value == "") {
+                    accountError.classList.replace("field-validation-valid", "field-validation-error");
+                    accountError.innerText = "A valid 'Account #' field is required";
+                    isValid = false;
+                }
+                if (document.getElementById('confirmAccountNumber').value != document.getElementById('accountNumber').value) {
+                    confirmError.classList.replace("field-validation-valid", "field-validation-error");
+                    confirmError.innerText = "Account numbers must match";
+                    isValid = false;
+                }
+                if (document.getElementById('routingNumber').value.length < 9 || !validRoutingNumber) {
+                    routingError.classList.replace("field-validation-valid", "field-validation-error");
+                    routingError.innerText = "A valid 'Routing #' field is required";
+                    isValid = false;
+                }
+            }
+            if (document.getElementById('chkCashAmount').checked) {
+                var cashAmount = Number(document.getElementById('cashAmount').value);
+                var cashMaxAmount = Number(document.getElementById('cashAmount').getAttribute('data-max-amount'));
+                if (isNaN(cashAmount)) {
+                    cashAmountError.classList.replace("field-validation-valid", "field-validation-error");
+                    cashAmountError.innerText = "Please enter a valid amount below " + document.getElementById('spCashTotal').innerText;
+                    isValid = false;
+                } else if (cashAmount > cashMaxAmount) {
+                    cashAmountError.classList.replace("field-validation-valid", "field-validation-error");
+                    cashAmountError.innerText = "Please enter a valid amount below " + document.getElementById('spCashTotal').innerText;
+                    isValid = false;
+                }
+            }
+            if (document.getElementById('achAgreements').checked == false) {
+                achAgreementsError.classList.replace("field-validation-valid", "field-validation-error");
+                achAgreementsError.innerText = "Please check the box to indicate you agree to proceed";
+                isValid = false;
+            }
+            if (!isValid)
+                return;
+
+            document.getElementById('achLoading').style.display = null;
+            this.style.display = 'none';
+            //var amt = document.getElementById('amount');
+
+            var accountId = -1;
+            if (document.getElementById('accountId').value != "")
+                accountId = document.getElementById('accountId').value;
+
+            $.ajax({
+                method: 'POST',
+                url: '/umbraco/Api/FundAmericaApi/CreateACH',
+                data: {
+                    id: '@(m.GetProperty("fundAmericaID").Value<string>())',
+                    accountId: accountId,
+                    amount: amt.value,
+                    bankName: document.getElementById("bankName").value,
+                    nameOnAccount: document.getElementById('nameOnAccount').value,
+                    accountType: document.getElementById('accountType').value,
+                    entityType: document.getElementById('entityType').value,
+                    accountNumber: document.getElementById('accountNumber').value,
+                    routingNumber: document.getElementById('routingNumber').value,
+                    autoInvest: autoInvest,
+                    monthlyAmount: monthlyInvestAmt,
+                    profileId: currentProfile,
+                    offeringId: '@(m.Id)'
+                }
+            }).fail(function (xhr, error, exc) {
+                document.getElementById('divAchError').style.display = null;
+                document.getElementById('achErrorDetails').innerHTML = xhr.responseJSON.ExceptionMessage;
+                document.getElementById('achLoading').style.display = "none";
+                document.getElementById('createAch').style.display = null;
+            }).done(function (data) {
+                $.magnificPopup.close();
+                //$.magnificPopup.open({
+                //    items: {
+                //        src: '#autoInvestPopup'
+                //    },
+                //    closeOnBgClick: false
+                //})
+                $.magnificPopup.open({
+                    items: {
+                        src: '#investSubmittedPopup'
+                    },
+                    closeOnBgClick: false
+                })
+            });
+        });
+        document.getElementById('createWire').addEventListener('click', function () {
+
+            wireAgreementsError.classList.replace("field-validation-error", "field-validation-valid");
+            var isValid = true;
+
+            if (document.getElementById('wireAgreements').checked == false) {
+                wireAgreementsError.classList.replace("field-validation-valid", "field-validation-error");
+                wireAgreementsError.innerText = "Please check the box to indicate you agree to proceed";
+                isValid = false;
+            }
+
+            if (!isValid)
+                return;
+
+            document.getElementById('divWireError').style.display = "none";
+            document.getElementById('wireLoading').style.display = null;
+            this.style.display = 'none';
+
+            $.ajax({
+                method: 'POST',
+                url: '/umbraco/Api/FundAmericaApi/CreateWire',
+                data: {
+                    id: '@(m.GetProperty("fundAmericaId").Value<string>())',
+                    amount: amt.value,
+                    profileId: currentProfile,
+                    offeringId: '@(m.Id)'
+                }
+            }).fail(function (xhr, error, exc) {
+                document.getElementById('divWireError').style.display = null;
+                document.getElementById('wireErrorDetails').innerHTML = xhr.responseJSON.ExceptionMessage;
+                document.getElementById('wireLoading').style.display = "none";
+                document.getElementById('createWire').style.display = null;
+            }).done(function (data) {
+                //window.location = "/sign-agreement/?agreement_id=" + data.id
+                var sharePrice = '@(m.GetProperty("sharePrice").Value<decimal>())';
+                var numberOfShares = parseFloat(amt.value) / parseFloat(sharePrice);
+                // put the investsubmittedpopup
+                $.magnificPopup.close();
+                //$.magnificPopup.open({
+                //    items: {
+                //        src: '#autoInvestPopup'
+                //    },
+                //    closeOnBgClick: false
+                //})
+                $.magnificPopup.open({
+                    items: {
+                        src: '#investSubmittedPopup'
+                    },
+                    closeOnBgClick: false
+                })
+            });
+        });
+
+        document.getElementById('autoInvestAch').addEventListener('click', function () {
+
+        // IF YOU ANSWER YES TO THIS YOU ARE ACCREDITTED
+        document.getElementById('nonIndividualAccreditationSubmit').addEventListener('click', function () {
+
+            var currentValue = document.querySelector('input[name="nonIndividualAccreditation"]:checked').value;
+            // start
+            $.ajax({
+                method: 'POST',
+                url: '/umbraco/surface/ProfilesSurface/AccreditProfile',
+                data: {
+                    verified: currentValue,
+                    profileId: currentProfile,
+                    offeringId: '@(m.Id)'
+                }
+            }).fail(function (xhr, error, exc) {
+            }).done(function (data) {
+                var test = data;
+
+                if (test = "Profile Updated Successully") {
+                    $.magnificPopup.close();
+                    window.location = window.location;
+                }
+                else {
+                }
+            });
+        });
+    });
+
+    function printform() {
+        $('#pWireDetails').printThis({ importStyle: true });
+    }
+
+    function updateAmountLimits() {
+        var typeRadio = document.querySelectorAll('input[name=investmentType]');
+        var amt = document.getElementById('amount');
+        var amtError = document.getElementById('amountError');
+        var minValue = Number(amt.getAttribute('data-min-amount'));
+        var shareValue = Number(amt.getAttribute('data-share-price'));
+        var maxRaise = Number(amt.getAttribute('data-max-amount'));
+        for (var i = 0; i < typeRadio.length; i++) {
+            typeRadio[i].addEventListener('change', function () {
+                amtError.classList.replace("field-validation-error", "field-validation-valid");
+                if (amt.value == "") {
+                    this.checked = false;
+                    amtError.classList.replace("field-validation-valid", "field-validation-error");
+                    amtError.innerText = 'A valid amount is required';
+                    return;
+                }
+                if (isNaN(Number(amt.value.replace(/,/g, '')))) {
+                    this.checked = false;
+                    amtError.classList.replace("field-validation-valid", "field-validation-error");
+                    amtError.innerText = 'A valid amount is required';
+                    return;
+                }
+                if (Number(amt.value.replace(/,/g, '')) < minValue) {
+                    this.checked = false;
+                    amtError.classList.replace("field-validation-valid", "field-validation-error");
+                    amtError.innerText = 'A valid amount greater than ' + minValue + ' is required';
+                    return;
+                }
+                if (Number(amt.value.replace(/,/g, '')) % shareValue != 0) {
+                    this.checked = false;
+                    amtError.classList.replace("field-validation-valid", "field-validation-error");
+                    amtError.innerText = 'A valid amount in a multiple of ' + shareValue + ' is required';
+                    return;
+                }
+                if (Number(amt.value.replace(/,/g, '')) > maxRaise) {
+                    this.checked = false;
+                    amtError.classList.replace("field-validation-valid", "field-validation-error");
+                    amtError.innerText = 'A valid amount less than ' + maxRaise + ' is required';
+                    return;
+                }
+                document.getElementById('divWireDetails').style.display = this.value == "ach" && this.checked ? "none" : null;
+                document.getElementById('divAch').style.display = this.value == "ach" && this.checked ? null : "none";
+            });
+        }
+    }
+</script>
