@@ -1,0 +1,1242 @@
+@inherits USNStarterKit.ViewPages.USNViewPage<USNStarterKit.Models.USNBaseViewModel>
+@using USNWebsite.USNControllers;
+@using Umbraco.Core.Services;
+@using Demo.App_Code.AdminPortal;
+
+
+<link rel="stylesheet" href="//code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+<link rel="stylesheet" href="/resources/demos/style.css">
+<script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.js"></script>
+
+<script>
+    $(function () {
+        $("#tabs").tabs();
+    });
+</script>
+
+@{
+    IPublishedContent m = Model.Content;
+    bool FeaturedImageVideo = false;
+    string[] testType = (string[])m.GetProperty("VideoLink").GetValue();
+    if (testType.HasValue())
+    {
+        FeaturedImageVideo = true;
+    }
+
+    bool accredited = false;
+    bool arizonaRes = false;
+
+    IContentService contentService = Services.ContentService;
+    IContent globalSettings = contentService.GetById(1472);
+    var siteKey = globalSettings.GetValue("googleReCAPTCHASiteKey").ToString();
+
+    // public key
+    //var siteKey = Umbraco.Forms.Core.Configuration.GetSetting("RecaptchaPublicKey");
+    var size = "normal";
+    string recaptchaReset = globalSettings.HasProperty("googleReCAPTCHASiteKey") && globalSettings.HasProperty("googleReCAPTCHASecretKey") ? "grecaptcha.reset();" : String.Empty;
+    string name;
+    bool azRes;
+    string address = "";
+    string city = "";
+    string state = "";
+    string zipCode = "";
+    string phone = "";
+    string email = "";
+
+    @*  check that the required info for that member is added and if not make them *@
+    var member = Members.GetCurrentMember();
+    if (member != null)
+    {
+        name = member.Name;
+        azRes = member.GetProperty("azResident").Value<bool>();
+        address = member.GetProperty("address").Value<string>();
+        city = member.GetProperty("city").Value<string>();
+        state = member.GetProperty("state").Value<string>(); // dropdown // or limit two characters
+        zipCode = member.GetProperty("zipCode").Value<string>();
+        phone = member.GetProperty("phone").Value<string>();
+
+        // start
+        // the workflows for different registration paths
+
+        if ((string)member.GetProperty("AccreditationStatus").Value() == "Accredited")
+        {
+            accredited = true;
+        }
+
+        if (member.GetProperty("State").Value().ToString().ToLower() == "az")
+        {
+            arizonaRes = true;
+        }
+        // end
+
+
+        // REMOVE ACCREDITATION REQUIREMENT PRIOR TO INVESTING
+        //if (address == "" || city == "" || state == "" || zipCode == "" || phone == "")
+        //{
+        //    HttpCookie myCookie;
+        //    if (Response.Cookies.AllKeys.Contains("BeforeRegistration"))
+        //    {
+        //        myCookie = Response.Cookies[name];
+        //    }
+        //    else
+        //    {
+        //        // store the page id in cookie
+        //        myCookie = new HttpCookie("BeforeRegistration");
+        //    }
+
+        //    // Set the cookie value to umbraco page id
+        //    myCookie.Value = m.Id.ToString();
+        //    // Set the cookie expiration date.
+        //    myCookie.Expires = DateTime.Now.AddDays(30);
+        //    // Add the cookie.
+        //    Response.Cookies.Add(myCookie);
+        //    // redirect to new register signup form that updates
+        //    Response.Redirect("/personal-info-form"); // here jesse
+        //}
+        //else if (!azRes && !(m.GetProperty("notAResidentUrl").GetValue() as string).IsNullOrWhiteSpace())
+        if (!azRes && !(m.GetProperty("notAResidentUrl").GetValue() as string).IsNullOrWhiteSpace())
+        {
+            if (!arizonaRes && !accredited)
+            {
+                // redirect to notAResidentUrl
+                Response.Redirect((string)m.GetProperty("notAResidentUrl").GetValue());
+            }
+        }
+    }
+    /* Get Funded So Far */
+    Decimal fundedSoFar = 0;
+    Decimal targetGoal = 0;
+    Decimal maxGoal = 0;
+    int offeringId = m.Id;
+    if (m.GetProperty("Target").HasValue())
+    {
+        fundedSoFar = Decimal.Parse(((MvcHtmlString)Html.Action("GetOfferingTotalInvested", "OfferingsSurface", new { offeringId = offeringId })).ToString());
+        targetGoal = Decimal.Parse((string)m.GetProperty("Target").Value());
+        maxGoal = Decimal.Parse((string)m.GetProperty("MaximumRaise").Value());
+    }
+}
+
+@{
+    IPublishedContent currentMember = Members.GetCurrentMember();
+    if (currentMember == null)
+    {
+        Response.Redirect("/login"); // here jesse
+    }
+}
+@*@Html.Action("GetProfiles", "ProfilesSurface")*@
+@{
+    if (currentMember != null)
+    {
+        Html.Action("GetProfilesThatCanInvest", "DecisionOfferingSurface", new { offeringId = offeringId });
+    }
+
+
+
+
+}
+<div class="row" style="padding: 50px 50px 25px;">
+    <div class="col-lg-6 col-xl-8">
+        <div class="media-section card">
+            <div class="card-body">
+                <div class="slideshow">
+                    @foreach (string videoString in testType)
+                    {
+                        if (videoString.Contains("youtube") || videoString.Contains("youtu.be") || videoString.Contains("vimeo"))
+                        {
+                            @ParseVideoUrl(videoString)
+                        }
+                        else
+                        {
+                            <video controls>
+                                <source src="@videoString" type="video/mp4">
+                            </video>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6 col-xl-4">
+        <div class="invest-details card">
+            <div class="card-body">
+                <div class="row">
+                    @{
+                        var numInvestors = Decimal.Parse(((MvcHtmlString)Html.Action("GetOfferingNumInvestors", "OfferingsSurface", new { offeringId = offeringId })).ToString());
+                    }
+
+                    @if (m.GetProperty("TargetIRR").HasValue())
+                    {
+                        if ((string)m.GetProperty("OfferingType").GetValue() != "Fund" && (string)m.GetProperty("OfferingType").GetValue() != "Regulation A")
+                        {
+                            <p>
+                                <span class="larger-text-offering"> @m.GetProperty("TargetIRR").GetValue()% </span>
+                                <span style="font-size: 1.1em;">TARGET PREFERRED RETURN</span>
+                            </p>
+                        }
+                    }
+                    @if (m.GetProperty("TargetHoldPeriod").HasValue())
+                    {
+                        <p>
+                            <span class="larger-text-offering"> @(m.GetProperty("minimumInvestment").Value<decimal>().ToString("c0"))</span>
+                            <span style="font-size: 1.1em;">MINIMUM INVESTMENT</span>
+                        </p>
+
+                        <p>
+                            <span class="larger-text-offering"> @m.GetProperty("TargetHoldPeriod").GetValue() </span>
+                            <span style="font-size: 1.1em;">TARGET HOLD PERIOD</span>
+                        </p>
+                    }
+
+                    @if ((string)m.GetProperty("OfferingType").GetValue() != "Fund" && (string)m.GetProperty("OfferingType").GetValue() != "Regulation A")
+                    {
+                        if (m.GetProperty("Target").HasValue())
+                        {
+                            Decimal Target = Decimal.Parse((string)m.GetProperty("Target").GetValue());
+                            string TargetParsed = Target.ToString("c0");
+
+                            if (fundedSoFar >= targetGoal)
+                            {
+
+                                <span class="larger-text-offering;" style="display:none;"> @TargetParsed </span>
+                                <span style="font-size: 1.1em; display:none;">TARGET RAISE</span>
+
+                            }
+                            else
+                            {
+                                <p>
+                                    <span class="larger-text-offering"> @TargetParsed </span>
+                                    <span style="font-size: 1.1em;">TARGET RAISE</span>
+                                </p>
+                            }
+                        }
+                    }
+
+                    @{
+                        if (m.GetProperty("Target").HasValue())
+                        {
+                            Decimal Target = Decimal.Parse((string)m.GetProperty("Target").GetValue());
+                            string TargetParsed = Target.ToString("c0");
+
+                            if (fundedSoFar >= targetGoal)
+                            {
+
+                                if (m.GetProperty("MaximumRaise").HasValue())
+                                {
+                                    Decimal MaximumRaise = Decimal.Parse((string)m.GetProperty("MaximumRaise").GetValue());
+                                    string MaximumRaiseParsed = MaximumRaise.ToString("c0");
+
+                                    if ((string)m.GetProperty("OfferingType").GetValue() != "Fund" && (string)m.GetProperty("OfferingType").GetValue() != "Regulation A")
+                                    {
+                                        <p>
+                                            <span class="larger-text-offering"> @MaximumRaiseParsed </span>
+                                            <span style="font-size: 1.1em;">MAX RAISE</span>
+                                        </p>
+                                    }
+                                }
+
+                            }
+                            else
+                            {
+
+                                if (m.GetProperty("MaximumRaise").HasValue())
+                                {
+                                    Decimal MaximumRaise = Decimal.Parse((string)m.GetProperty("MaximumRaise").GetValue());
+                                    string MaximumRaiseParsed = MaximumRaise.ToString("c0");
+
+                                    if ((string)m.GetProperty("OfferingType").GetValue() != "Fund" && (string)m.GetProperty("OfferingType").GetValue() != "Regulation A")
+                                    {
+                                        <p>
+                                            <span class="larger-text-offering" style="display: none;"> @MaximumRaiseParsed </span>
+                                            <span style="font-size: 1.1em; display: none;">MAX RAISE</span>
+                                        </p>
+                                    }
+                                }
+
+                            }
+                        }
+                    }
+
+                    @* Three new fields only FUNDA HAS THEM *@
+                    @if ((string)m.GetProperty("OfferingType").GetValue() == "Regulation A")
+                    {
+
+                        if (m.GetProperty("TargetIRR").HasValue())
+                        {
+                            <p style="display: none;">
+                                <span class="larger-text-offering">
+                                    @(m.GetProperty("TargetIRR").Value())
+                                </span>
+                                <span style="font-size: 1.1em; display: none;">TARGET PREFERRED RETURN</span>
+                            </p>
+                        }
+
+                        if (m.GetProperty("totalTargetPreferredReturn").HasValue())
+                        {
+                            <p>
+                                <span class="larger-text-offering">
+                                    @(m.GetProperty("totalTargetPreferredReturn").Value())
+                                </span>
+                                <span style="font-size: 1.1em;">TARGET ANNUAL TOTAL RETURN</span>
+                            </p>
+                        }
+
+                        if (m.GetProperty("targetCashFlow").HasValue())
+                        {
+                            <p>
+                                <span class="larger-text-offering">
+                                    @(m.GetProperty("targetCashFlow").Value())
+                                </span>
+                                <span style="font-size: 1.1em;">PREFERRED ANNUAL CASH DISTRIBUTIONS*</span>
+                            </p>
+                        }
+
+                        {
+                            <div style="padding: 0px 25px 0px 28px; text-align: center; display: block; ">
+                                <h5 style="text-align: center;"><strong>5-7% Cash Flow</strong></h5>
+                                <span style="font-size: 18.2px;">Expected from Type A properties</span> <br>
+                                <h5 style="text-align: center;"><strong>15% Preferred Equity</strong></h5>
+                                <span style="font-size: 18.2px;">Expected from Type B developing properties  </span><br>
+                                <hr />
+                            </div>
+                        }
+
+                        <p>
+                            <span style="text-align: center; font-size: 27px;">
+                                <strong>
+                                    @(m.GetProperty("minimumInvestment").Value<decimal>().ToString("c0"))
+                                </strong>
+                            </span><br />
+                            <span style="font-size: 1.1em;">MINIMUM INVESTMENT</span>
+                        </p>
+
+                        <div style="text-align: center; padding-top: 20px; width: 100%;">
+                            <button class="btn btn-lg base-btn-bg base-btn-bg-solid base-btn-bg-hover-solid base-btn-text base-btn-borders invest-offering-btn" style="width: auto;">
+                                <span></span>
+                                Invest Now
+                            </button>
+                        </div>
+
+                    }
+
+                    @* end new fields *@
+
+                </div>
+
+
+                @{
+                    Decimal percentage = 0;
+                    string percentageStr = percentage + "%";
+                }
+
+                @if ((string)m.GetProperty("OfferingType").GetValue() != "Fund" && (string)m.GetProperty("OfferingType").GetValue() != "Regulation A")
+                {
+                    <div style="background-color: #e0e0e0; padding: 16px; border-radius: 10px">
+                        @* target goal *@
+
+                        @if ((string)m.GetProperty("OfferingType").GetValue() != "Fund" && (string)m.GetProperty("OfferingType").GetValue() != "Regulation A")
+                        {
+                            <div style="padding-bottom: 12px; text-align: center;">
+                                <span class="larger-text-offering" style="color: black;">@fundedSoFar.ToString("c0") </span>
+                                <span style="font-size: 1.2em; padding-right: 10px; color: black;">FUNDED</span>
+
+                                <span class="larger-text-offering" style="color: black; ">@numInvestors</span>
+                                <span style="font-size: 1.2em; color: black;">INVESTORS</span>
+                            </div>
+                        }
+
+                        <div class="thermometer-casing-target-offering" style="background: rgba(255,255,255,0.1); justify-content: flex-start; border-radius: 100px; align-items: center; position: relative; padding: 0 5px; display: flex; height: 60px; width: 100%;">
+                            @if (m.GetProperty("Target").HasValue())
+                            {
+                                if (percentage < 100)
+                                {
+                                    if (fundedSoFar >= targetGoal)
+                                    {
+                                        percentage = 100;
+                                        percentageStr = percentage + "%";
+                                    }
+                                    else
+                                    {
+                                        percentage = Math.Round(((fundedSoFar / targetGoal) * 100), 0, MidpointRounding.AwayFromZero);
+                                        percentageStr = percentage + "%";
+                                    }
+                                }
+                                if (fundedSoFar < targetGoal)
+                                {
+
+                                    <style>
+                                        .thermometer-liquid {
+                                            animation: load 3s normal forwards;
+                                            box-shadow: 0 10px 40px -10px #fff;
+                                            border-radius: 100px;
+                                            background: #6CA437;
+                                            height: 50px;
+                                            width: @percentageStr;
+                                        }
+
+                                        @@keyframes load {
+                                            0% {
+                                                width: 0;
+                                            }
+
+                                            100% {
+                                                width: @percentageStr;
+                                            }
+                                        }
+
+                                    </style>
+
+                                    <div class="thermometer-liquid" style="border-radius: 90px; width:@percentageStr;">
+                                        @if (percentage >= 55)
+                                        {
+                                            <p class="thermometer-percent" style="font-size: 25px; padding-top: 2px;">@percentage%</p>
+                                        }
+                                        else
+                                        {
+                                            <p class="thermometer-percent-popped" style="font-size: 25px; padding-top: 2px;">@percentage%</p>
+                                        }
+                                    </div>
+                                }
+                                else if (m.GetProperty("MaximumRaise").HasValue())
+                                {
+                                    percentage = Math.Round(((fundedSoFar / maxGoal) * 100), 0, MidpointRounding.AwayFromZero);
+                                    percentageStr = percentage + "%";
+
+                                    <style>
+                                                .thermometer-liquid {
+                                                    animation: load 3s normal forwards;
+                                                    box-shadow: 0 10px 40px -10px #fff;
+                                                    border-radius: 100px;
+                                                    background: #6CA437;
+                                                    height: 50px;
+                                                    width: @percentageStr;
+                                                }
+
+                                                    @@keyframes load {
+                                                        0% {
+                                                            width: 0;
+                                                        }
+
+                                                        100% {
+                                                            width: @percentageStr;
+                                                        }
+                                                    }
+
+                                    </style>
+
+                                    <div class="thermometer-liquid" style="border-radius: 90px; width: @percentageStr;">
+                                        @if (percentage >= 55)
+                                        {
+                                            <p class="thermometer-percent" style="font-size: 25px; padding-top: 2px;">@percentage%</p>
+                                        }
+                                        else
+                                        {
+                                            <p class="thermometer-percent-popped" style="font-size: 25px; padding-top: 2px;">@percentage%</p>
+                                        }
+                                    </div>
+                                }
+                            }
+                        </div>
+
+
+                        <div style="text-align: center; padding-top: 20px; width: 100%;">
+                            <button class="btn btn-lg base-btn-bg base-btn-bg-solid base-btn-bg-hover-solid base-btn-text base-btn-borders invest-offering-btn" style="width: auto;">
+                                <span></span>
+                                Invest Now
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+<div class="row" style="padding: 0 50px 25px;">
+    <div class="col-lg-12 col-xl-8">
+        <div class="photoCarousel card">
+            <div class="card-body">
+                <div class="slideshow">
+                    @if (m.GetProperty("OfferingImages").HasValue())
+                    {
+                        List<IPublishedContent> test1 = (List<IPublishedContent>)m.GetProperty("OfferingImages").Value();
+                        foreach (IPublishedContent galleryImage in (List<IPublishedContent>)m.GetProperty("OfferingImages").Value())
+                        {
+                            <img class="featured-image" src="@galleryImage.Url()" />
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+        @if (m.GetProperty("ProjectOverview").HasValue())
+        {
+            <div class="projectOverview card">
+                <div class="card-body">
+                    <h2>Project Overview</h2>
+                    @Html.Raw(m.GetProperty("ProjectOverview").GetValue().ToString())
+                </div>
+            </div>
+        }
+
+
+        @if (m.GetProperty("tabbedAccordion").HasValue())
+        {
+            List<Umbraco.Web.PublishedModels.OfferingAccordionItem>
+                tabs = (List<Umbraco.Web.PublishedModels.OfferingAccordionItem>
+                    )m.GetProperty("tabbedAccordion").GetValue();
+            <div class="tabbedAccordion card">
+                <div class="card-body">
+                    <h2>Overview</h2>
+                    <div class="repeatable accordion tab-basic">
+                        <div id="tabs" class="col-lg-12 col-xl-12">
+                            <ul class="tabbed-options;">
+                                @foreach (Umbraco.Web.PublishedModels.OfferingAccordionItem aItem in tabs)
+                                {
+                                    Regex rgx = new Regex("[^a-zA-Z0-9]");
+                                    var parsedTitle = rgx.Replace(aItem.Title.ToString(), "");
+
+                                    <li>
+                                        <a class="tabbed-titles"
+                                           href="#tabs-@parsedTitle">@aItem.Title.ToString()</a>
+                                    </li>
+                                }
+                            </ul>
+                            @foreach (Umbraco.Web.PublishedModels.OfferingAccordionItem aItem in tabs)
+                            {
+                                Regex rgx = new Regex("[^a-zA-Z0-9]");
+                                var parsedTitle = rgx.Replace(aItem.Title.ToString(), "");
+
+                                <div id="tabs-@parsedTitle" class="tabbed-descriptions">
+                                    <p id="tabs-@parsedTitle">@Html.Raw(aItem.Description.ToString())</p>
+                                </div>
+                            }
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+
+        <div class="col-lg-12 col-xl-12">
+            @if (m.GetProperty("ProjectBreakdown").HasValue())
+            {
+                List<Umbraco.Web.PublishedModels.OfferingAccordionItem> test = (List<Umbraco.Web.PublishedModels.OfferingAccordionItem>)m.GetProperty("ProjectBreakdown").GetValue();
+
+                //do this jesse
+                <div class="projectBreakdown card">
+                    <div class="card-body">
+                        <h2>Project Breakdown</h2>
+                        <div class="repeatable accordion tab-basic " data-os-animation="fadeIn" data-os-animation-delay="0s" data-os-animation-duration="1.2s">
+                            @foreach (Umbraco.Web.PublishedModels.OfferingAccordionItem aItem in test)
+                            {
+                                Regex rgx = new Regex("[^a-zA-Z0-9]");
+                                var parsedTitle = rgx.Replace(aItem.Title.ToString(), "");
+
+                                <p class="tab ">
+                                    <a class="nav-link nav-button-link collapsed" data-toggle="collapse" data-target="#collapse_project-@parsedTitle"
+                                       aria-expanded="false" aria-controls="collapse_project-@parsedTitle">@aItem.Title.ToString()</a>
+                                </p>
+                                <div id="collapse_project-@parsedTitle" class="info repeatable-content collapse">
+                                    <div class="text">
+                                        <p>@Html.Raw(aItem.Description.ToString())</p>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="col-lg-12 col-xl-4">
+        <div class="row">
+            <div class="col-lg-6 col-xl-12">
+                @if (m.GetProperty("KeyHighlights").HasValue())
+                {
+                    <div class="key-highlights card">
+                        <div class="card-body">
+                            <h2>Key Highlights</h2>
+                            @Html.Raw(m.GetProperty("KeyHighlights").GetValue().ToString())
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="col-lg-12 col-xl-12">
+                <div class="documents card">
+                    <div class="card-body">
+                        @{
+                            List<Umbraco.Web.PublishedModels.OfferingDocument> documents = (List<Umbraco.Web.PublishedModels.OfferingDocument>)m.GetProperty("Documents").GetValue();
+                            if (documents != null && documents.Count > 0)
+                            {
+                                <h2>Documents</h2>
+                                <ul>
+                                    @foreach (Umbraco.Web.PublishedModels.OfferingDocument document in documents)
+                                    {
+                                        <li>
+                                            <a target="_blank" href="@document.Document.Url()"> @document.Document.Name() </a>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-12 col-xl-12">
+                @if (TempData["StatusSuccess"] != null)
+                {
+                    <div class="alert alert-success">
+                        <div class="info">
+                            <p>@TempData["StatusSuccess"]</p>
+                        </div>
+                    </div>
+                }
+                @if (TempData["StatusFailure"] != null)
+                {
+                    <div class="alert alert-danger">
+                        <div class="info">
+                            <p>@TempData["StatusFailure"]</p>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="col-lg-12 col-xl-12">
+                <div class="askQuestionContact card">
+                    <div class="card-body">
+                        <h2>Ask a question</h2>
+                        @using (Html.BeginUmbracoForm<ContactOfferingController>("SubmitContact"))
+                        {
+
+                            if (member != null)
+                            {
+                                name = member.Name;
+                                <input type="text" class="form-control" name="Name" value="@name" style="display:none;" />
+                            }
+                            if (member != null)
+                            {
+                                email = member.GetProperty("email").Value<string>();
+                                <input type="text" class="form-control" name="emailAddress" value="@email" style="display:none;" />
+                            }
+                            <label>Message</label>
+                            <textarea class="form-control" name="message"></textarea>
+                            // recaptcha here
+                            @*<script src="https://www.google.com/recaptcha/api.js" async defer></script>*@
+                            <br />
+                            @*<div class="g-recaptcha" data-sitekey="@siteKey" data-size="@size"></div>*@
+
+
+                            <input style="display:none;" name="PageName" type="text" value="@Model.Content.Name" />
+
+                            <button class="btn  base-btn-bg base-btn-bg-solid base-btn-bg-hover-solid base-btn-text base-btn-borders"><span></span>Send</button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-12 col-xl-12">
+                @if (m.GetProperty("AskAQuestionAccordion").HasValue())
+                {
+                    List<Umbraco.Web.PublishedModels.OfferingAccordionItem> test2 = (List<Umbraco.Web.PublishedModels.OfferingAccordionItem>)m.GetProperty("AskAQuestionAccordion").GetValue();
+                    <div class="askQuestion card">
+                        <div class="card-body">
+                            <h2>Project FAQs</h2>
+                            <div class="repeatable accordion tab-basic " data-os-animation="fadeIn" data-os-animation-delay="0s" data-os-animation-duration="1.2s">
+                                @foreach (Umbraco.Web.PublishedModels.OfferingAccordionItem aItem in test2)
+                                {
+                                    Regex rgx = new Regex("[^a-zA-Z0-9]");
+                                    var parsedTitle2 = rgx.Replace(aItem.Title.ToString(), "");
+
+                                    <p class="tab ">
+                                        <a class="nav-link nav-button-link collapsed" style="font-weight: 700;" data-toggle="collapse" data-target="#collapse_project-@parsedTitle2"
+                                           aria-expanded="false" aria-controls="collapse_project-@parsedTitle2">@aItem.Title.ToString()</a>
+                                    </p>
+                                    <div id="collapse_project-@parsedTitle2" class="info repeatable-content collapse">
+                                        <div class="text">
+                                            <p>@Html.Raw(aItem.Description.ToString())</p>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@* DETERMINE WHICH PROFILES CAN INVEST IN THIS *@
+<div class="mfp-hide white-popup-block" id="profilePopup">
+    <h2>Select Profile</h2>
+    @{
+        var type = m.GetProperty("offeringType").Value<string>(); // Fund, Individual
+
+        List<ProfilesSubmission> allProfiles = (List<ProfilesSubmission>)TempData["AllProfiles"];
+
+        // we need it to refresh after submission from special popup - this fixes it
+        if (TempData["PleaseRefresh"] != null && (bool)TempData["PleaseRefresh"] && currentMember != null)
+        {
+            Html.Action("GetProfilesThatCanInvest", "DecisionOfferingSurface", new { offeringId = offeringId });
+            allProfiles = (List<ProfilesSubmission>)TempData["AllProfiles"];
+        }
+    }
+
+
+
+    @if (allProfiles != null)
+    {
+
+        if (allProfiles.FindAll(x => x.EligibleClassName == "CreateEntity/IRA").Count != 0)
+        {
+            <div class="select-profile-item ">
+                <div class="profile-block">
+                    <div class="profile-nickname">
+                        Create Entity/Ira profile to invest.
+                    </div>
+                    <div class="profile-type">
+
+                    </div>
+                </div>
+                <div class="profile-block">
+
+                </div>
+                <div class="profile-block">
+
+                </div>
+                <div class="profile-block">
+
+                </div>
+                <div class="profile-block">
+                    <strong> <a href="/profiles">Create Profile</a></strong>
+                    <br />
+                    <strong>Offering Type is @type  </strong>
+                    <br />
+                </div>
+            </div>
+        }
+        else
+        {
+            foreach (var profile in allProfiles)
+            {
+                //bool isAccredited = profile.AccreditedInvestor == "true";
+                //bool isAZResident = profile.State == "AZ";
+
+                //bool isEligible = false;
+                //string className = "";
+                //// logic to deterime if profile is eligible
+                //if (isAccredited && isAZResident)
+                //{
+                //    isEligible = true;
+                //}
+                //if (isAccredited && !isAZResident && type == "Fund")
+                //{
+                //    isEligible = true;
+                //}
+                //if (!isAccredited && isAZResident && type == "Individual Projects")
+                //{
+                //    isEligible = true;
+                //}
+                //if (!isEligible)
+                //{
+                //    className = "not-eligible";
+                //}
+                // end
+
+                <div class="select-profile-item @Html.Raw(profile.EligibleClassName)">
+                    <div class="profile-block">
+                        <div class="profile-nickname">
+                            <strong>@profile.Nickname</strong>
+                        </div>
+                        <div class="profile-type">
+                            (@profile.ProfileType)
+                        </div>
+                    </div>
+                    <div class="profile-block">
+                        @(profile.AccreditedInvestor == "true" ? "Accredited" : "Unaccredited")
+                    </div>
+                    <div class="profile-block">
+                        @(profile.ProfileVerified == "True" ? "Verified" : "Unverified")
+                    </div>
+                    <div class="profile-block">
+                        @profile.State
+                    </div>
+                    <div class="profile-block">
+                        @if (profile.EligibleClassName == "")
+                        {
+                            <button class="btn base-btn-bg base-btn-bg-solid base-btn-bg-hover-solid base-btn-text base-btn-borders use-profile-btn" data-profileid="@profile.Id"><span></span>Use This Profile</button>
+                            <br />
+                        }
+                        else
+                        {
+                            if (profile.EligibleClassName == "CreateEntity/IRA")
+                            {
+                                <strong>Create Entity/Ira profile to invest. <a href="/profiles">Create Profile</a></strong>
+                                <br />
+                                <strong>Offering Type is @type  </strong>
+                                <br />
+                            }
+                            else
+                            {
+                                <strong>Ineligible</strong>
+                                <br />
+                                <strong>Offering Type is @type  </strong>
+                                <br />
+                            }
+                        }
+                        <a href="/profiles/profile?profileId=@profile.Id">Edit Profile &raquo;</a>
+                    </div>
+                </div>
+            }
+        }
+    }
+    <div class="container text-center">
+        <div class="row" style="justify-content: space-between;">
+            <div col-6>
+                <h6 style="font-style: italic;">Add Another Profile</h6>
+                <p>Create another profile for your IRA, LLC, or Trust entities.</p>
+            </div>
+            <div col-6>
+                <p class="link" style="font-style: italic;">
+                    <button class="btn btn-lg c3-btn-bg c3-btn-bg-solid c3-btn-bg-hover-solid c3-btn-text c3-btn-borders" onclick="$.magnificPopup.open({ items: { src: '#profileSubmissionDiv' }});"><span></span>Create New Profile</button>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+@* end DETERMINE WHICH PROFILE CAN INVEST *@
+<div class="mfp-hide white-popup-block" id="questionaireAboutNonIndividual">
+    <h2>If you answer yes to this you are accredited otherwise there will be some restrictions on the amount you can invest.</h2>
+    <ul>
+        <li>
+            A trust with assets in excess of $5 million, not formed for the specific purpose of acquiring the securities
+            offered, whose purchase is directed by a sophisticated person;
+        </li>
+        <li>A business in which all the equity owners are accredited investors;</li>
+        <li>
+            An employee benefit plan, within the meaning of the Employee Retirement Income Security Act, if a bank,
+            insurance company, or registered investment adviser makes the investment decisions, or if the plan has total
+            assets in excess of $5 million;
+        </li>
+        <li>
+            A bank, insurance company, registered investment company, business development company, or small
+            business investment company;
+        </li>
+        <li>
+            A charitable organization, corporation, or partnership, not formed for the specific purpose of acquiring the
+            securities offered, with total assets exceeding $5 million; and
+        </li>
+        <li>
+            A director, executive officer, or general partner of the company selling the securities, or any director,
+            executive officer, or general partner of a general partner of that issuer.
+        </li>
+    </ul>
+    <label>
+        <input type="radio" name="nonIndividualAccreditation" id="nonIndividualAccreditation" value="verified" />
+        Yes
+
+    </label>
+    <label>
+        <input type="radio" name="nonIndividualAccreditation" id="nonIndividualAccreditation" value="not verified" selected />
+        No
+    </label>
+    <button id="nonIndividualAccreditationSubmit">Submit</button>
+</div>
+
+@if ((string)m.GetProperty("offeringType").GetValue() == "Regulation A")
+{
+    <div class="mfp-hide white-popup-block" id="investOptionPopup">
+        <h2>How would you like to invest?</h2>
+        <div class="form-group">
+            <label><input type="radio" name="investmentOption" value="one-time" /> One-Time Invest</label>
+            <label><input type="radio" name="investmentOption" value="mthReoccurring" /> Monthly Reoccurring</label>
+            <hr />
+        </div>
+    </div>
+}
+
+<div class="mfp-hide white-popup-block" id="investPopup">
+    <h2>Investment Details</h2>
+    @if ((string)m.GetProperty("offeringType").GetValue() == "Regulation A")
+    {
+        <p style="font-style:italic">
+            Based on the info provided, you are able to invest up to <strong>
+                @*$@((m.GetProperty("maximumRaise").Value<decimal>() - fundedSoFar).ToString("F0"))*@
+
+
+                <span id="profileMaxAmountFundable"> </span>
+
+            </strong>
+        </p>
+    }
+
+
+    <div class="form-group">
+        <label class="control-label">Amount <span style="color:red">*</span></label>
+
+        @* GetMaxInvestmentAmountFromProfile - for the max - - based off of the profile chosen *@
+        @*GetMaxInvestmentAmountFromProfile - @Html.Action("GetProfilesThatCanInvest", "DecisionOfferingSurface", new { offeringId = offeringId })
+        *@
+        @if ((string)m.GetProperty("offeringType").GetValue() == "Regulation A")
+        {
+            <div style="position: relative;">
+                <input type="text" class="form-control" placeholder="@(m.GetProperty("minimumInvestment").Value<decimal>().ToString("c0")) required in @(m.GetProperty("sharePrice").Value<decimal>().ToString("c0")) amounts" id="amount"
+                       style="padding-left: 30px; font-size: 20px;"
+                       data-min-amount="@(m.GetProperty("minimumInvestment").Value<decimal>().ToString("F0"))"
+                       data-share-price="@(m.GetProperty("sharePrice").Value<decimal>().ToString("F0"))"
+                       data-max-amount="@((m.GetProperty("maximumRaise").Value<decimal>() - fundedSoFar).ToString("F0"))" />
+                <span style="position: absolute; left: 10px; top: 15px; z-index: 1; text-align: left; font-size: 25px;">$</span>
+                <span class="field-validation-valid" id="amountError"></span>
+            </div>
+
+            <script>
+                // Add commas to number input
+                function formatNumberInput(input) {
+                    // Remove non-numeric characters except decimal point
+                    input.value = input.value.replace(/[^\d\.]/g, '');
+
+                    // Separate integer and decimal parts
+                    var parts = input.value.split('.');
+                    var integerPart = parts[0];
+                    var decimalPart = parts.length > 1 ? '.' + parts[1] : '';
+
+                    // Add commas to integer part
+                    integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+                    // Set new value of input
+                    input.value = integerPart + decimalPart;
+                }
+
+                // Format number input on keyup
+                var amountInput = document.getElementById("amount");
+                amountInput.addEventListener("keyup", function () {
+                    formatNumberInput(this);
+                });
+
+                // Format number input on blur (when input loses focus)
+                amountInput.addEventListener("blur", function () {
+                    formatNumberInput(this);
+                });
+            </script>
+
+        }
+        @if ((string)m.GetProperty("offeringType").GetValue() != "Regulation A")
+        {
+            <div style="position: relative;">
+                <input type="text" class="form-control" step="1000" placeholder="@(m.GetProperty("minimumInvestment").Value<decimal>().ToString("c0")) required in @(m.GetProperty("sharePrice").Value<decimal>().ToString("c0")) amounts" id="amount"
+                       style="padding-left: 30px; font-size: 20px;"
+                       data-min-amount="@(m.GetProperty("minimumInvestment").Value<decimal>().ToString("F0"))"
+                       data-share-price="@(m.GetProperty("sharePrice").Value<decimal>().ToString("F0"))"
+                       data-max-amount="@((m.GetProperty("maximumRaise").Value<decimal>() - fundedSoFar).ToString("F0"))" />
+                <span style="position: absolute; left: 10px; top: 15px; z-index: 1; text-align: left; font-size: 25px;">$</span>
+                <span class="field-validation-valid" id="amountError"></span>
+            </div>
+
+            <script>
+                // Add commas to number input
+                function formatNumberInput(input) {
+                    // Remove non-numeric characters except decimal point
+                    input.value = input.value.replace(/[^\d\.]/g, '');
+
+                    // Separate integer and decimal parts
+                    var parts = input.value.split('.');
+                    var integerPart = parts[0];
+                    var decimalPart = parts.length > 1 ? '.' + parts[1] : '';
+
+                    // Add commas to integer part
+                    integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+                    // Set new value of input
+                    input.value = integerPart + decimalPart;
+                }
+
+                // Format number input on keyup
+                var amountInput = document.getElementById("amount");
+                amountInput.addEventListener("keyup", function () {
+                    formatNumberInput(this);
+                });
+
+                // Format number input on blur (when input loses focus)
+                amountInput.addEventListener("blur", function () {
+                    formatNumberInput(this);
+                });
+            </script>
+        }
+    </div>
+    <div class="form-group">
+        <label><input type="radio" name="investmentType" value="ach" style="margin-right: 4px;" /> ACH </label>
+        <label><input type="radio" name="investmentType" value="wire" style="margin-right: 4px;" /> Wire Transfer </label>
+    </div>
+    <div id="divWireDetails" style="display:none;">
+        <p id="pWireDetails">
+            <strong>
+                Alliance Bank of Arizona
+            </strong><br>6263 North Scottsdale RD Suite 100 <br>Scottsdale AZ 85250
+            <br><br><strong>Routing #: </strong>
+            122105980<br>
+            <strong>Account #: </strong>@m.GetProperty("wireAccountNum").GetValue()<br>
+            <strong>Memo: </strong> <span id="wireTransferNameInvestor"></span> <br>
+        </p>
+        <div class="row">
+            <div class="col pl-4" style="background-color: #e3e3e3; padding-top: 15px;">
+                <div class="wirecheckbox">
+                    <label>
+                        <input type="checkbox" name="confirm1" value="con1" id="wireAgreements" style="transform: scale(2.5);accent-color: #677A92;">
+                        <span style="margin-left: 10px; font-size: 16px;">
+                            I understand that this investment is contingent on the ability of Neighborhood Ventures to verify the accuracy and eligibility of the information I have provided, and I am willing to provide any necessary documents.<span style="color:red">*</span>
+                        </span>
+                    </label>
+                    <span class="field-validation-valid" id="wireAgreementsError">Please check each box to proceed</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="alert alert-danger" style="display:none;" id="divWireError">
+            There was an error creating your investment. Please try again or contact us with the details below:
+            <pre id="wireErrorDetails"></pre>
+        </div>
+
+        <div class="actions">
+            <button class="col-5 btn base-btn-bg base-btn-bg-solid base-btn-bg-hover-solid base-btn-text base-btn-borders" style="
+    width: 100%;
+    background-color: #677A92;
+    --base-btn-text-hover: #677A92;
+    border: solid 1px #677A92; "
+                    id="createWire">
+                <span></span>Submit
+            </button>
+            <button class="col-5 btn base-btn-bg base-btn-bg-solid base-btn-bg-hover-solid base-btn-text base-btn-borders" style="
+    width: 100%;
+    background-color: #677A92;
+    --base-btn-text-hover: #677A92;
+    border: solid 1px #677A92; "
+                    id="printPopup" onclick="printform() ">
+                <span></span>Print
+            </button>
+            <img id="wireLoading" style="height:32px;width:32px;display:none;" src="~/images/loading-on-white.gif" />
+        </div>
+    </div>
+
+    <div id="divAch" style="display:none;">
+        @*<div id="divAchAgreement" style="max-height:200px;overflow-y:scroll;border:1px #aaa solid;padding:7px;margin-bottom:20px;">
+
+
+
+            </div>*@
+
+        <div id="divAchAgreement" style="max-height:200px;overflow-y:scroll;border:1px #aaa solid;padding:7px;margin-bottom:20px;">
+            <p><strong>IMPORTANT: Please read before completing, signing and submitting.</strong></p>
+
+            <p>Direct Payment via ACH is a transfer of funds from (or to) a bank account for the purposes of making a payment.</p>
+
+            <p>I (we) hereby authorize the escrow agent (“Escrow Agent”), to electronically initiate credit and debit entries to my (our) account at the financial institution listed below (hereinafter “Bank”), and, if necessary, initiate adjustments for any transactions credited/debited in error.</p>
+
+            <p>This authority authorizes the Escrow Agent to credit my (our) account to correct errors and with payments, refunds, reimbursements, and other funds, and to debit my (our) account for the investments I make, and will remain in effect until such time that the Escrow Agent is notified by me (us) in writing to revoke it, with such notice provided at support@neighborhood.ventures at least 3 business days in advance. I (we) agree that the ACH transactions I (we) authorize comply with all applicable law.</p>
+
+            <p>First transaction will occur on or after <span id="todaysDate">@DateTime.Today.ToString("MM/dd/yyy")</span></p>
+        </div>
+        <div class="row">
+            <div class="form-group col-lg-12 col-sm-12">
+                <label class="control-label">Preferred Bank Account</label>
+                <select id="accountId" name="AccountId" class="form-control">
+                </select>
+            </div>
+        </div>
+        <div id="bankDetails">
+            <div class="row">
+                <div class="form-group col-lg-4 col-sm-12">
+                    <label class="control-label">Name on Account <span style="color:red"> *</span></label>
+                    <input type="text" id="nameOnAccount" class="form-control" />
+                    <span class="field-validation-valid" id="nameError"></span>
+                </div>
+                <div class="form-group col-lg-4 col-sm-12">
+                    <label class="control-label">Name of Bank <span style="color:red"> *</span></label>
+                    <input type="text" id="bankName" name="BankName" class="form-control" />
+                    <span class="field-validation-valid" id="bankNameError"></span>
+                </div>
+                <div class="form-group col-lg-4 col-sm-12">
+                    <label class="control-label">Routing # <span style="color:red"> *</span></label>
+                    <input type="text" id="routingNumber" class="form-control" maxlength="9" />
+                    <span class="field-validation-valid" id="routingError"></span>
+                </div>
+
+
+            </div>
+            <div class="row" style="align-items:center;">
+                <div class="form-group col-lg-6 col-sm-12">
+                    <label class="control-label">Account Type <span style="color:red"> *</span></label>
+                    <select id="accountType" class="form-control">
+                        <option>Checking</option>
+                        <option>Savings</option>
+                    </select>
+                </div>
+                <div class="form-group col-lg-6 col-sm-12">
+                    <label class="control-label">Entity Type <span style="color:red"> *</span></label>
+                    <select id="entityType" class="form-control">
+                        <option>Business</option>
+                        <option>Personal</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="form-group col-lg-6 col-sm-12">
+                    <label class="control-label">Account # <span style="color:red"> *</span></label>
+                    <input type="text" id="accountNumber" class="form-control" maxlength="17" />
+                    <span class="field-validation-valid" id="accountError"></span>
+                </div>
+                <div class="form-group col-lg-6 col-sm-12">
+                    <label class="control-label">Confirm Account # <span style="color:red"> *</span></label>
+                    <input type="text" id="confirmAccountNumber" class="form-control" maxlength="17" />
+                    <span class="field-validation-valid" id="confirmAccountError"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12 pl-4">
+                <div class="investCheckbox">
+                    <label>
+                        <input type="checkbox" name="confirm1" id="chkCashAmount" style="transform:scale(2.5);accent-color:#677A92;" />
+                        <span style="margin-left: 10px; font-size: 16px;">
+                            Use Cash Balance for this investment <span style="opacity: 0.4;">|</span><span style="font-size: 20px;"> Max amount: </span><strong><span id="spCashTotal" style="color:#677A92;"></span></strong>
+                        </span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="row" id="cashBalanceAmountRow" style="display:none">
+            <p class="col pl-4">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean vulputate elit quis dui maximus ultricies. Ut ut aliquet nisi. Cras gravida urna tellus, quis porta tortor blandit quis. Donec auctor, neque at pharetra sagittis, odio tellus varius massa, sed placerat nibh libero id nunc. Quisque id accumsan turpis, quis fringilla velit. Maecenas in ultricies risus, sit amet ultricies enim. Morbi eget augue nunc. Quisque in leo quis magna suscipit iaculis. Sed in aliquet justo, a rutrum metus. Duis congue elementum finibus. Integer laoreet scelerisque elit sit amet pretium. Nullam feugiat, orci sollicitudin ornare ultricies, purus ex rutrum urna, ut suscipit.</p>
+            <div class="form-group col-12 pl-4" style="display: flex; flex-direction: column; align-items: center;">
+                <label class="control-label" for="cashAmount" style="text-align: left; font-size: 20px;">Amount <span style="color:red"> *</span></label>
+                <div style="position:relative;">
+                    <span style="position: absolute; left: 8px; top: 6px; z-index: 1; text-align: left; font-size: 20px;">$</span>
+                    <input type="number" id="cashAmount" step="100" min="100" style="font-size: 20px; text-align: center; width: 247.32px;">
+                </div>
+                <span class="field-validation-valid" id="cashAmounttError"></span>
+            </div>
+            <hr />
+        </div>
+
+        @if ((string)m.GetProperty("OfferingType").GetValue() == "Regulation A")
+        {
+            <div class="row" id="monthlyAmountRow" style="display:none;">
+                <div class="form-group col-12 pl-4" style="display: flex; flex-direction: column; align-items: center;">
+                    <label class="control-label" for="monthlyAmount" style="text-align: left; font-size: 20px;">Amount <span style="color:red"> *</span></label>
+                    <div style="position:relative;">
+                        <span style="position: absolute; left: 8px; top: 6px; z-index: 1; text-align: left; font-size: 20px;">$</span>
+                        <input type="number" id="monthlyAmount" step="100" min="100" style="font-size: 20px; text-align: center;">
+                    </div>
+                    <span class="field-validation-valid" id="monthlyAmountError"></span>
+                </div>
+            </div>
+        }
+        <div class="row">
+            <div class="col pl-4" style="background-color: #e3e3e3; padding-top: 15px;">
+                <div class="achcheckbox">
+                    <label>
+                        <input type="checkbox" name="confirm1" value="con1" id="achAgreements" style="transform: scale(2.5);accent-color: #677A92;">
+                        <span style="margin-left: 10px; font-size: 16px;">
+                            I understand that this investment is contingent on the ability of Neighborhood Ventures to verify the accuracy and eligibility of the information I have provided, and I am willing to provide any necessary documents.<span style="color:red"> *</span>
+                        </span>
+                    </label>
+                    <span class="field-validation-valid" id="achAgreementsError">Please check each box to proceed</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="alert alert-danger" style="display:none;" id="divAchError">
+            There was an error creating your investment. Please try again or contact us with the details below:
+            <pre id="achErrorDetails"></pre>
+        </div>
+
+        <div class="actions mx-auto" style="
+    width: 50%;
+">
+            <button class="btn base-btn-bg base-btn-bg-solid base-btn-bg-hover-solid base-btn-text base-btn-borders" id="createAch"
+                    style="
+    width: 100%;
+    background-color: #677A92;
+    --base-btn-text-hover: #677A92;
+    border: solid 1px #677A92; ">
+                <span style="
+    width: 100%;
+"></span>Submit
+            </button>
+            <img id="achLoading" style="height:32px;width:32px;display:none;" src="/images/loading-on-white.gif">
+        </div>
+    </div>
+</div>
+
+@if ((string)m.GetProperty("OfferingType").GetValue() == "Regulation A")
+{
+    <div class="mfp-hide white-popup-block" id="autoInvestPopup">
+        <div class="col pl-4">
+            <h2 style="text-align:center;">Thank you for investing with us!</h2>
+            <div style="text-align:center;">
+                <img style="width: 75px;" src="https://neighborhood.ventures/media/e2plfplv/2022nv-icon-black1-600x600.png" alt="NV Logo">
+            </div>
+            <div>
+                <h6 style="text-align:center; font-size:18px;">You now have the option to auto-invest on a monthly basis into the NV REIT</h6>
+                <h6 style="text-align:center; font-size:18px;">You will be contacted by your account manager for further information.</h6>
+            </div>
+            <div class="autocheckbox" style="display: flex; justify-content: center; align-items: center; text-align: center; padding-top: 20px;">
+                <label>
+                    <input type="checkbox" id="chkAutoInvest" style="transform:scale(2.5); accent-color:#677A92;">
+                    <span style="margin-left: 10px;font-size: 18px;text-align: center; color:#677A92;">
+                        Turn on Auto-Invest
+                    </span>
+                </label>
+            </div>
+            <button class="btn base-btn-bg base-btn-bg-solid base-btn-bg-hover-solid base-btn-text base-btn-borders" id="SubmitAutoInvest" style="width: 50%; background-color: #677A92; --base-btn-text-hover: #677A92; border: solid 1px #677A92; margin-top: 20px; display: flex; text-align: center; align-items: center; justify-content: center; margin-left: auto; margin-right: auto;"><span style="width: 100%;"></span>Submit</button>
+        </div>
+    </div>
+}
+
+<div class="mfp-hide white-popup-block" id="investSubmittedPopup">
+    <h2 style="text-align:center;">Thank you for investing with us!</h2>
+    <div style="text-align:center;">
+        <img style="width: 90px;" src="https://neighborhood.ventures/media/e2plfplv/2022nv-icon-black1-600x600.png" alt="NV Logo">
+    </div>
+    <p>Your request of <span><b>@amount</b></span> into <span><b>@m.GetProperty("OfferingName").GetValue()</b></span> has been submitted.</p>
+    <p>To complete your investment, a subscription agreement has been emailed to <span><b>@email</b></span> for an electronic signature.</p>
+    <p>Contact us at <a href="mailto:info@neighborhood.ventures" style="font-weight: 700;">info@neighborhood.ventures</a> with any questions.</p>
+</div>
+
+@{
+    ProfilesSubmission profileSubmission = new ProfilesSubmission();
+    profileSubmission.MemberId = Members.GetCurrentMemberId();
+}
+
+<section id="profileSubmissionDiv" class="mfp-hide white-popup-block">
+    @Html.Partial("~/Views/Partials/ProfilesForm.cshtml", profileSubmission)
+</section>
+
+@Html.Partial("~/Views/Partials/InvestmentScripts.cshtml", m, new ViewDataDictionary { { "address", address }, { "city", city }, { "state", state }, { "zipCode", zipCode }, { "phone", phone } })
+@*<script type="text/javascript" src="/scripts/minAjax.js"></script>*@
+
+@helper ParseVideoUrl(string url)
+{
+    if (url == null)
+    {
+        Html.Raw(url);
+    }
+
+    if (url.Contains("vimeo.com"))
+    {
+        string videoId = url.Substring(url.LastIndexOf('/') + 1);
+        Html.Raw("https://player.vimeo.com/video/" + videoId + "");
+    }
+    else if (url.Contains("youtube.com"))
+    {
+        string videoId = Regex.Match(url, @"(?:v=)([a-zA-Z0-9-_]+)(?:&?)").Groups[1].Value;
+
+        <iframe src="@("https://www.youtube.com/embed/" + videoId + "?playsinline=1&iv_load_policy=3&modestbranding=1")" frameborder="0" allow="fullscreen; picture-in-picture" style="width: 100%; min-height:500px;" allowfullscreen></iframe>
+    }
+    else if (url.Contains("youtu.be"))
+    {
+        string videoId = Regex.Match(url, @"(?:be\/)([a-zA-Z0-9-_]+)(?:\??)").Groups[1].Value;
+
+        <iframe src="@("https://www.youtube.com/embed/" + videoId + "?playsinline=1&iv_load_policy=3&modestbranding=1")" frameborder="0" allow="fullscreen; picture-in-picture" style="width: 100%; min-height: 500px;" allowfullscreen></iframe>
+    }
+}
