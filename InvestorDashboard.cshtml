@@ -1,0 +1,1499 @@
+@*@inherits Umbraco.Web.Mvc.UmbracoViewPage<ContentModels.InvestorDashboard>*@
+
+@inherits USNStarterKit.ViewPages.USNViewPage<USNStarterKit.Models.USNBaseViewModel>
+
+@using USNWebsite.USNControllers;
+
+@using ContentModels = Umbraco.Web.PublishedModels;
+@{
+    Layout = "USNMaster.cshtml";
+
+    USNPageLayoutSettings pageLayoutSettings = Umbraco.GetPageLayoutSettings(Model.Content.Value<string>("pageLayout"));
+
+    Usnstyle websiteStyle = (Usnstyle)Model.WebsiteStyle;
+}
+@{
+    string name = "";
+    string currentMember = Members.CurrentUserName;
+    IPublishedContent currentMemberNode;
+    if (currentMember != "")
+    {
+        currentMemberNode = Members.GetByEmail(currentMember);
+        TempData["CurrentMemberId"] = currentMemberNode.Id;
+        Html.Action("GetProfiles", "InvestorDashboardForms");
+
+        if (currentMemberNode.GetProperty("Address").Value() == null || (string)currentMemberNode.GetProperty("Address").Value() == "")
+        {
+            // get out of here
+            //tell them to complete their profile
+            // Redirect
+            <script>
+                window.location.href = "/complete-profile/";
+            </script>
+            // complete-profile/
+        }
+
+    }
+
+}
+@section BodyTag
+{
+    @Html.Partial(Model.ThemeFolder + "/MiscPageElements/BodyTag", Model, new ViewDataDictionary { { "pageLayout", pageLayoutSettings.PageLayout } })
+}
+
+@if (TempData["StatusSuccessInvest"] != null)
+{
+    <div class="alert-success" style=" padding: 20px; font-weight:700; text-align: center; color: #556f85; background-color: rgb(255 255 255); border: 1px #ccc solid;">
+        @Html.Raw(TempData["StatusSuccessInvest"])
+    </div>
+}
+
+@if (TempData["StatusSuccessTransfer"] != null)
+{
+    <div class="alert-success" style=" padding: 20px; font-weight:700; text-align: center; color: #556f85; background-color: rgb(255 255 255)">@Html.Raw(TempData["StatusSuccessTransfer"])</div>
+}
+
+<style>
+    /* fix for issue where tooltips were not showing up */
+    .dxc-tooltip {
+        z-index: 99999;
+    }
+    /* custom arrow on status dropdowns */
+    .statusContainer::after {
+        content: "▼";
+        position: absolute;
+        top: 7px;
+        right: 17px;
+    }
+
+    .statusContainer {
+        position: relative;
+    }
+</style>
+<div class="dashboard-banner">
+    <h5 style="color: #313a45; font-weight:700;">2022 K1'S</h5><h7 style="color: #313a45; font-weight: 600; font-style: italic;">CLICK THE GREEN CIRCLE ON THE RIGHT | CLICK PROFILES | SELECT PROFILE | CLICK DOCUMENTS TAB</h7>
+</div>
+
+<style>
+    .dashboard-banner {
+        background-color: #86a3c8;
+        color: #313a45;
+        text-align: center;
+        padding: 10px;
+    }
+
+    h5 {
+        font-size: 20px;
+        margin: 0;
+    }
+</style>
+<section class="content c5-bg c5-bg-solid" style="padding-top: 35px!important">
+    <div class="investor-dashboard">
+        <div class="dash-header">
+            <div class="btn-set">
+                @*<a class="btn" href="/profiles#createProfile">Create a New Profile</a>*@
+                <div class="profile-dropdown">
+                    <select class="btn" id="profileSelection" onchange="UpdateCashAvailable(this)">
+                        @if (TempData["Profiles"] != null)
+                        {
+                            List<Demo.App_Code.AdminPortal.ProfilesSubmission> profilesForMember = (List<Demo.App_Code.AdminPortal.ProfilesSubmission>)TempData["Profiles"];
+                            foreach (Demo.App_Code.AdminPortal.ProfilesSubmission profile in profilesForMember)
+                            {
+                                <option value="@profile.Id">@profile.Nickname &nbsp;&nbsp;</option>
+                            }
+                        }
+                    </select>
+                </div>
+            </div>
+            <h2>Amount Invested</h2>
+            <h4></h4>
+        </div>
+
+        <script>
+            var pendingTotal = 0;
+            // first load starts here
+            document.addEventListener("DOMContentLoaded", function () {
+                var cashAvailableTotal = 0;
+                var cashAvailableTotalMobile = 0;
+                populateOfferingDropdown();
+                var profileIdstart = document.getElementById("profileSelection").value;
+                // getTransferRequestsApprovedFromDb
+                //var pendingTotal = 0;
+                $.ajax({
+                    url: '/umbraco/surface/InvestorDashboardForms/getTransferRequestsPendingFromDb',
+                    method: 'GET',
+                    data: {
+                        profileId: parseInt(document.getElementById("profileSelection").value),
+                    },
+                    dataType: 'json'
+                }).done(function (data) {
+
+                    pendingTotal = data;
+
+                });
+                // getTransferRequestsPendingFromDb
+                var approvedTotal = 0;
+                $.ajax({
+                    url: '/umbraco/surface/InvestorDashboardForms/getTransferRequestsApprovedFromDb',
+                    method: 'GET',
+                    data: {
+                        profileId: parseInt(document.getElementById("profileSelection").value),
+                    },
+                    dataType: 'json'
+                }).done(function (data) {
+                    approvedTotal = data;
+                });
+                // end totals
+
+                var s = document.getElementById('accountId');
+                s.options.add(new Option('New Account', ''));
+                $.ajax('/umbraco/api/investorapi/ListAccounts?profileId=' + profileIdstart, {
+                    method: 'POST'
+                }).done(function (data) {
+                    for (var i = 0; i < data.length; i++) {
+                        var d = data[i];
+                        s.options.add(new Option(d.BankName + ' (' + d.AccountName + ')', d.Id));
+                    }
+                });
+
+                var xhttp = new XMLHttpRequest();
+                xhttp.onreadystatechange = function () {
+                    if (this.readyState == 4 && this.status == 200) {
+                        var data = xhttp.response;
+                        var datajsonversion = JSON.parse(data);
+                        // get the cashavailabletable // desktop
+                        var cashAvailableTable = $("#cash-account-copy #CashAvailableTable")[0];
+                        cashAvailableTable.innerHTML = `<div class="cash-log-header">
+                                                                                        <div class="cash-log-info">
+                                                                                            <div class="cash-log-date">Date</div>
+                                                                                            <div class="cash-log-memo">Memo</div>
+                                                                                        </div>
+                                                                                        <div class="cash-log-amount" id="tableCashAvailableTotal">$0.00</div>
+                                                                                        <div class="cash-log-balance" id="tableCashAvailableTotal">Balance</div>
+                                                                                    </div> <div class="CashAvailableTableResults"> </div>`;
+
+                        var CashAvailableTableInner = $("#cash-account-copy #CashAvailableTable .CashAvailableTableResults")[0];
+                        for (var i = 0; i < datajsonversion.length; i++) {
+                            var d = datajsonversion[i];
+                            var numparsed = Number.parseFloat(d.Amount);
+                            cashAvailableTotal += numparsed;
+                            CashAvailableTableInner.innerHTML += `<div class="cash-log-item">
+                                                                                            <div class="cash-log-info">
+                                                                                                <div class="cash-log-date">` + d.FormattedDate + `</div>
+                                                                                                <div class="cash-log-memo">` + d.Memo + `</div>
+                                                                                            </div>
+                                                                                                <div class="cash-log-amount">` + fmt.format(d.Amount) + `</div>
+                                                                                                <div class="cash-log-balance">` + fmt.format(d.Balance) + `</div>
+                                                                                        </div>`;
+                        }
+                        document.getElementById("cashAvailableTotal").innerText = fmt.format(cashAvailableTotal);
+                        document.getElementById("tableCashAvailableTotal").innerText = fmt.format(cashAvailableTotal);
+
+                        // getTransferRequestsApprovedFromDb
+                        // getTransferRequestsPendingFromDb
+
+                        if (pendingTotal == undefined)
+                            pendingTotal = 0;
+                        document.getElementById("amount").max = cashAvailableTotal - pendingTotal; // need to make sure pending transfer are subtracted from this
+                        document.getElementById("ProfileId").value = parseInt(document.getElementById("profileSelection").value)
+
+                        // mobile
+                        var cashAvailableTableMobile = $("#cash-account #CashAvailableTable")[0];
+
+
+
+
+                        cashAvailableTableMobile.innerHTML = `<div class="cash-log-header">
+                                                                                        <div class="cash-log-info">
+                                                                                            <div class="cash-log-date">Date</div>
+                                                                                            <div class="cash-log-memo">Memo</div>
+                                                                                        </div>
+                                                                                        <div class="cash-log-amount" id="tableCashAvailableTotal">$0.00</div>
+                                                                                        <div class="cash-log-balance">Balance</div>
+                                                                                    </div> <div class="CashAvailableTableResults"> </div>`;
+
+
+
+                        var CashAvailableTableInner = $("#cash-account #CashAvailableTable .CashAvailableTableResults")[0];
+
+                        for (var i = 0; i < datajsonversion.length; i++) {
+                            var d = datajsonversion[i];
+                            var numparsed = Number.parseFloat(d.Amount);
+                            cashAvailableTotalMobile += numparsed;
+                            CashAvailableTableInner.innerHTML += `<div class="cash-log-item">
+                                                                                        <div class="cash-log-info">
+                                                                                            <div class="cash-log-date">` + d.FormattedDate + `</div>
+                                                                                            <div class="cash-log-memo">` + d.Memo + `</div>
+                                                                                        </div>
+                                                                                        <div class="cash-log-amount">` + fmt.format(d.Amount) + `</div>
+                                                                                        <div class="cash-log-balance">` + fmt.format(d.Balance) + `</div>
+
+                                                                                    </div>`;
+                        }
+                        document.getElementById("cashAvailableTotal").innerText = fmt.format(cashAvailableTotal);
+                        document.getElementById("tableCashAvailableTotal").innerText = fmt.format(cashAvailableTotal);
+                        // end mobile
+
+                        //// start offering dropdown
+                        var offeringDropdowns = document.getElementsByClassName("offeringDropdown");
+                        //for (i = 0; i < offeringDropdowns.length; i++) {
+                        offeringDropdowns[0].addEventListener("change", function () {
+                            // get performance chart
+                            $.ajax({
+                                url: '/umbraco/surface/InvestorDashboardForms/GetCashAvailableByProfileIdAndOfferingId',
+                                method: 'GET',
+                                data: {
+                                    id: parseInt(document.getElementById("profileSelection").value),
+                                    OfferingId: parseInt(document.getElementsByClassName("offeringDropdown")[0].value)
+                                },
+                                dataType: 'json'
+                            }).done(function (data) {
+                                // build the table
+                                // desktop version
+                                //    buildCashAvailableTable(data, true,true); // do this but don't update the tile the tile should stay the same
+                                //else // mobile
+                                buildCashAvailableTable(data, true, false);
+                            });
+                        });
+
+                        // mobile
+                        offeringDropdowns[1].addEventListener("change", function () {
+                            // get performance chart
+                            $.ajax({
+                                url: '/umbraco/surface/InvestorDashboardForms/GetCashAvailableByProfileIdAndOfferingId',
+                                method: 'GET',
+                                data: {
+                                    id: parseInt(document.getElementById("profileSelection").value),
+                                    OfferingId: parseInt(document.getElementsByClassName("offeringDropdown")[1].value)
+                                },
+                                dataType: 'json'
+                            }).done(function (data) {
+                                // build the table
+                                // desktop version
+                                buildCashAvailableTable(data, true, true); // do this but don't update the tile the tile should stay the same
+                                //else // mobile
+                                //    buildCashAvailableTable(data, true,false);
+                            });
+                        });
+
+                        // mobile end
+
+                        //}
+
+                        // end
+
+                    }
+                };
+                xhttp.open("GET", "/umbraco/surface/InvestorDashboardForms/GetCashAvailableByProfileId?id=" + profileIdstart, true);
+                xhttp.send();
+            });
+
+
+
+            function UpdateCashAvailable(selectField) {
+                var profileSelection = document.getElementById("profileSelection");
+                var profileId = profileSelection.selectedOptions[0].value;
+                UpdateTotalInvested();
+                populateOfferingDropdown();
+                // populate filter on cash available stuff
+                // add dropdown logic
+                // come back here jesse
+                var offeringDropdowns = document.getElementsByClassName("offeringDropdown");
+                //for (i = 0; i < offeringDropdowns.length; i++) {
+                offeringDropdowns[0].addEventListener("change", function () {
+                    // get performance chart
+                    $.ajax({
+                        url: '/umbraco/surface/InvestorDashboardForms/GetCashAvailableByProfileIdAndOfferingId',
+                        method: 'GET',
+                        data: {
+                            id: parseInt(document.getElementById("profileSelection").value),
+                            OfferingId: parseInt(document.getElementsByClassName("offeringDropdown")[0].value)
+                        },
+                        dataType: 'json'
+                    }).done(function (data) {
+                        // build the table
+                        //var datajsonversion = JSON.parse(data);
+                        //if (i == 2)
+                        //    buildCashAvailableTable(data, true, true); // do this but don't update the tile the tile should stay the same
+                        //else // mobile
+                        buildCashAvailableTable(data, true, false);
+                    });
+                });
+
+                // desktop
+                offeringDropdowns[1].addEventListener("change", function () {
+                    // get performance chart
+                    $.ajax({
+                        url: '/umbraco/surface/InvestorDashboardForms/GetCashAvailableByProfileIdAndOfferingId',
+                        method: 'GET',
+                        data: {
+                            id: parseInt(document.getElementById("profileSelection").value),
+                            OfferingId: parseInt(document.getElementsByClassName("offeringDropdown")[1].value)
+                        },
+                        dataType: 'json'
+                    }).done(function (data) {
+                        // build the table
+                        //var datajsonversion = JSON.parse(data);
+                        //if (i == 2)
+                        //    buildCashAvailableTable(data, true, true); // do this but don't update the tile the tile should stay the same
+                        //else // mobile
+                        buildCashAvailableTable(data, true, false);
+                    });
+                });
+
+                //}
+                // end populate filter on cash available
+
+                // // first load all option
+                var xhttp = new XMLHttpRequest();
+                xhttp.onreadystatechange = function () {
+                    if (this.readyState == 4 && this.status == 200) {
+                        // Typical action to be performed when the document is ready:
+                        //var data = xhttp.responseText;
+                        var data = xhttp.response;
+                        var datajsonversion = JSON.parse(data);
+                        buildCashAvailableTable(datajsonversion, null, true);
+                        buildCashAvailableTable(datajsonversion, null, false);
+                    }
+                };
+                xhttp.open("GET", "/umbraco/surface/InvestorDashboardForms/GetCashAvailableByProfileId?id=" + profileId, true);
+                xhttp.send();
+
+                // update the cash available total // jesse
+                //document.getElementById("cashAvailableTotal").innerText = fmt.format(cashAvailableTotal);
+
+
+
+            }
+            function UpdateTotalInvested() {
+                $.ajax({
+                    url: '/umbraco/api/investorapi/GetTotal',
+                    method: 'GET',
+                    data: {
+                        profileId: parseInt(document.getElementById("profileSelection").value)
+                    },
+                    dataType: 'json'
+                }).done(function (data) {
+                    var formatter = Intl.NumberFormat('en-US', { currency: 'USD', maximumFractionDigits: 0, style: 'currency' });
+                    document.querySelector('.dash-header h4').innerText = formatter.format(data);
+                });
+            }
+            // more first load stuff
+            var fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0, });
+            document.addEventListener('DOMContentLoaded', function () {
+                UpdateTotalInvested();
+                const portfolioClass = new MutationObserver((mutationsList, observer) => {
+                    mutationsList.forEach(mutation => {
+                        if (mutation.attributeName == 'class' && document.querySelector('#portfolio-copy').classList.contains('active')) {
+                            $.ajax({
+                                url: '/umbraco/api/investorapi/getportfolio',
+                                method: 'GET',
+                                data: {
+                                    profileId: parseInt(document.getElementById("profileSelection").value)
+                                },
+                                dataType: 'json'
+                            }).done(function (data) {
+
+
+
+                                //console.log(data);
+                                // desktop version
+                                BuildPortfolioChart('#portfolio-copy .profile-portfolio', data);
+                                // mobile version
+                                BuildPortfolioChart('#portfolio .profile-portfolio', data);
+
+                            });
+                        }
+                    });
+                });
+                portfolioClass.observe(document.querySelector('#portfolio-copy'), { attributes: true });
+                const performanceClass = new MutationObserver((mutationsList, observer) => {
+                    mutationsList.forEach(mutation => {
+                        if (mutation.attributeName == 'class' && document.querySelector('#performance-copy').classList.contains('active')) {
+                            //populateOfferingDropdown();
+                            var profileIdInvestmentTable = parseInt(document.getElementById("profileSelection").value)
+                            // desktop version
+                            // start
+                            $.ajax({
+                                url: '/umbraco/api/investorapi/GetPerformance',
+                                method: 'GET',
+                                data: {
+                                    profileId: parseInt(document.getElementById("profileSelection").value)
+                                    //,OfferingId: ""
+                                },
+                                dataType: 'json'
+                            }).done(function (data) {
+
+                                BuildPerformanceChart('#performance-copy .profile-performance .statistics', data, colors);
+                                // mobile version
+                                BuildPerformanceChart('#performance-copy .profile-performance .statistics', data, colors);
+
+                                // remove the header from the javascript generating part
+                                //and then putting that header stuff where the mobile version of the table will show up
+                                //and where the desktop version will show up
+
+                                // special call colby wants it to only show stuff from default in table
+                                $.ajax({
+                                    url: '/umbraco/api/investorapi/getportfolioFilterProfileIdAndStatus',
+                                    method: 'GET',
+                                    data: {
+                                        profileId: parseInt(document.getElementById("profileSelection").value),
+                                        status: 'Default'
+                                    },
+                                    dataType: 'json'
+                                }).done(function (data) {
+                                    // build the table
+                                    buildInvestmentsTable(data);
+
+                                    // start
+                                    var statusDropdowns = document.getElementsByClassName("statusDropdown");
+                                    for (i = 0; i < statusDropdowns.length; i++) {
+                                        statusDropdowns[i].addEventListener("change", function () {
+                                            // get performance chart
+                                            $.ajax({
+                                                url: '/umbraco/api/investorapi/getportfolioFilterProfileIdAndStatus',
+                                                method: 'GET',
+                                                data: {
+                                                    profileId: parseInt(document.getElementById("profileSelection").value),
+                                                    status: document.getElementsByClassName("statusDropdown")[i - 1].value
+                                                },
+                                                dataType: 'json'
+                                            }).done(function (data) {
+                                                // build the table
+                                                //buildInvestmentsTable(data);
+                                                buildInvestmentsTableResults(data);
+                                                // might need to simplify this later
+
+                                                // end
+
+                                            });
+                                        });
+                                    }
+                                    // end
+
+                                });
+
+
+
+                            });
+
+                        }
+                    });
+                });
+                performanceClass.observe(document.querySelector('#performance-copy'), { attributes: true });
+            });
+            // end first load
+
+
+            function BuildPortfolioChart(selector, data) {
+                $(selector).dxPieChart({
+                    type: 'doughnut',
+                    palette: 'Soft Pastel',
+                    dataSource: data,
+                    legend: {
+                        itemTextPosition: 'right',
+                        horizontalAlignment: 'center',
+                        verticalAlignment: 'bottom',
+                        margin: 20,
+                        markerSize: 15,
+                        font: {
+                            weight: 500,
+                            size: 17,
+                            family: "Montserrat",
+                        },
+                    },
+                    export: {
+                        enabled: true,
+                    },
+                    tooltip: {
+                        argumentField: 'offering',
+                        //arrowLength: 10,
+                        //border: {},
+                        //color: "#ffffff",
+                        //container: undefined,
+                        //contentComponent: null,
+                        //contentRender: null,
+                        //contentTemplate: undefined,
+                        cornerRadius: 30,
+                        customizeTooltip(arg) {
+                            return {
+                                text: `${arg.argumentText}<br/>${arg.valueText}`,
+                            }
+                        },
+                        enabled: true,
+                        font: {
+                            weight: 500,
+                            size: 17,
+                            family: "Montserrat",
+                        },
+                        shadow: {
+                            blur: 10,
+                            color: "#000000",
+                            offsetX: 0,
+                            offsetY: 4,
+                            opacity: 0.4
+                        },
+                        format: 'currency',
+                        //interactive: false,
+                        //location: "center",
+                        //opacity: undefined,
+                        paddingLeftRight: 18,
+                        paddingTopBottom: 15,
+                        //shadow: {},
+                        //shared: false,
+                        //zIndex: undefined
+                    },
+                    title: {
+                        text: '',
+                        subtitle: {
+                            text: '',
+                        },
+                    },
+                    series: [{
+                        argumentField: 'offering',
+                        label: {
+                            visible: false,
+                            format: 'thousands',
+                            customizeText(point) {
+                                return `${point.argumentText.toString()}: $${point.valueText}`
+                            },
+                            connector: {
+                                visible: false,
+                            },
+                        },
+                    }],
+                    size: {
+                        height: 500,
+                        width: undefined,
+                    },
+                });
+            }
+
+            function BuildPerformanceChart(selector, data, colors) {
+                var currentAmount = 0;
+                var fullJson = data;
+                const colors = ["#FF0000", "#00FF00", "#0000FF"];
+                // example #performance-copy .profile-performance .statistics
+
+                // loop through each series and assign a color
+                fullJson.series.forEach((series, index) => {
+                    if (colors && colors[index]) {
+                        series.color = colors[index];
+                    }
+                });
+
+                $(selector).dxChart({
+                    palette: 'Soft Pastel',
+                    dataSource: fullJson.generatedJson,
+                    commonSeriesSettings: {
+                        argumentField: 'date',
+                        type: 'line',
+                        label: {
+                            format: 'thousands'
+                        }
+                    },
+                    margin: {
+                        bottom: 20,
+                    },
+                    argumentAxis: {
+                        valueMarginsEnabled: false,
+                        discreteAxisDivisionMode: 'crossLabels',
+                        grid: {
+                            visible: true,
+                        },
+                        visualRange: {
+                            startValue: "",
+                            endValue: "",
+                        },
+                    },
+                    // this will match to the json objects above
+                    series: fullJson.series,
+
+                    legend: {
+                        verticalAlignment: 'bottom',
+                        horizontalAlignment: 'center',
+                        itemTextPosition: 'right',
+                        font: {
+                            weight: 500,
+                            size: 17,
+                            family: "Montserrat",
+                        },
+                        markerSize: 15,
+                        margin: {
+                            top: 20,
+                        },
+                    },
+                    export: {
+                        enabled: true,
+                    },
+                    tooltip: {
+                        cornerRadius: 30,
+                        customizeTooltip(arg) {
+                            return {
+                                text: `${arg.argumentText}<br/>${arg.valueText}`,
+                            }
+                        },
+                        enabled: true,
+                        font: {
+                            weight: 500,
+                            size: 17,
+                            family: "Montserrat",
+                        },
+                        shadow: {
+                            blur: 10,
+                            color: "#000000",
+                            offsetX: 0,
+                            offsetY: 4,
+                            opacity: 0.4
+                        },
+                        format: 'currency',
+                        //interactive: false,
+                        //location: "center",
+                        //opacity: undefined,
+                        paddingLeftRight: 18,
+                        paddingTopBottom: 15,
+                        //shadow: {},
+                        shared: false,
+                        //zIndex: undefined
+                    },
+                    // maybe for customizing individual points
+                    customizePoint: function () {
+                        if (this.data.type == 'investment')
+                            return { size: '17', hoverStyle: { color: 'white' } }
+                    },
+
+                    valueAxis: {
+                        label: {
+                            alignment: undefined,
+                            component: null,
+                            customizeHint: null,
+                            customizeText: null,
+                            displayMode: "standard",
+                            font: {
+                                color: "#767676",
+                                family: "Montserrat",
+                                opacity: 1,
+                                size: 15,
+                                weight: 400
+                            },
+                        },
+                    },
+
+                    commonAxisSettings: {
+                        aggregatedPointsPosition: "betweenTicks",
+                        allowDecimals: undefined,
+                        breakStyle: {},
+                        color: "#767676",
+                        constantLineStyle: {},
+                        discreteAxisDivisionMode: "betweenLabels",
+                        endOnTick: undefined,
+                        grid: {},
+                        inverted: false,
+                        label: {
+                            alignment: undefined,
+                            component: null,
+                            displayMode: "standard",
+                            font: {
+                                color: "#767676",
+                                family: "Montserrat",
+                                opacity: 1,
+                                size: 15,
+                                weight: 400,
+                            },
+                        },
+                    },
+
+                    size: {
+                        height: 570,
+                        width: undefined,
+                    },
+
+                    onPointClick(e) {
+                        e.target.select();
+                    },
+                    onLegendClick(e) {
+                        const series = e.target;
+                        if (series.isVisible()) {
+                            series.hide();
+                        } else {
+                            series.show();
+                        }
+                    }
+                });
+            }
+
+
+        </script>
+
+
+
+        <div class="dash-panel clearfix">
+            <div class="dash-block" id="performance">
+                <div class="preview">
+                    <img src="/images/investor-dashboard-performance-icon.png" />
+                    <h6>Performance</h6>
+                </div>
+                <div class="full-view" style="display:none;">
+                    <h6>Performance *</h6>
+                    @*light grey black opacity .55, on hover 1*@
+                    <span class="closeButton"></span>
+                    <div style="max-width:80%;margin:auto;">
+                        <div class="profile-performance">
+                            <div class="statistics">
+
+                            </div>
+                            <p style="font-size: 12px;">* Your investment is illiquid and is subject to change moving forward</p>
+                            <hr />
+                            <div id="investments-table-container" class="table-fixes">
+
+                                @* filter *@
+                                @* allows an investor to click on a dropdown showing the offerings they have received distributions in. *@
+
+                                @*<label>Filter by Offering</label>
+                                    <select class="offeringDropdown">
+
+
+                                    </select>*@
+
+                                <h2 style="color:black;" class="text-center">YOUR INVESTMENTS</h2>
+                                <p class="hint"><img src="~/images/swipe-icon.png" style=" width: auto;" alt="">Swipe/scroll to view table.</p>
+
+                                <div class="chart">
+                                    <div class="chart-wrap">
+                                        <div id="YourInvestmentsTable" class="YourInvestmentsTable">
+                                            <div class="cash-log-header">
+                                                <div class="cash-log-date">Date</div>
+                                                <div class="cash-log-project">Project</div>
+                                                <div class="statusContainer">
+                                                    <select class="statusDropdown">
+                                                        <option value="Default">Status</option>
+                                                        <option value="All">View All</option>
+                                                        <option value="completed">Completed</option>
+                                                        <option value="cancelled">Cancelled</option>
+                                                        <option value="pending">Pending</option>
+                                                    </select>
+                                                </div>
+                                                <div class="cash-log-amount">Investment</div>
+                                            </div>
+                                            <div class="changingValuesInvestment">
+
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+
+
+                            </div>
+                            @* end *@
+                        </div>
+                    </div>
+                    @*<img src="/media/2rypi5cw/picture1.png" />*@
+                </div>
+            </div>
+            <div class="dash-block" id="portfolio">
+                <div class="preview">
+                    <img src="/images/investor-dashboard-portfolio-icon.png" />
+                    <h6>Portfolio</h6>
+                </div>
+                <div class="full-view" style="display:none;">
+                    <h6>Portfolio</h6>
+                    <span class="closeButton"></span>
+                    <div style="max-width:80%;margin:auto;">
+                        <div class="profile-portfolio"></div>
+                    </div>
+
+                    @* start *@
+
+
+                    @* end *@
+
+                    @*<img src="/media/qaopxwl1/slide4_sm.png" />*@
+                    @*<p>[dynamic data here]</p>*@
+                </div>
+                <script type="text/javascript">
+
+                </script>
+            </div>
+
+
+
+            <div class="dash-block" id="cash-account">
+                <div class="preview" style="text-align: center;">
+                    <h2 id="cashAvailableTotal"></h2>
+                    <h6>Cash Available</h6>
+                    @* total of cash deposits here *@
+
+                </div>
+                <div class="full-view table-fixes" style="display:none;">
+                    @*<h6>Cash Available</h6>*@
+                    <span class="closeButton"></span>
+
+                    @*Start*@
+                    <label>PROJECT</label>
+                    <select class="offeringDropdown">
+                    </select>
+                    <div class="btns">
+                        @*<a class="btn form-modal" href="#InvestForm">Invest</a>*@
+                        <a class="btn form-modal" style="margin: 0 49%;" href="#TransferForm">Transfer</a>
+                        <p style="clear:both;"></p>
+                    </div>
+
+
+                    @* end *@
+
+                    <p class="hint"><img src="~/images/swipe-icon.png" style=" width: auto;" alt="">Swipe/scroll to view table.</p>
+                    <div class="chart">
+
+                        <div class="chart-wrap">
+                            @* start *@
+                            <div id="CashAvailableTable">
+                                <div class="cash-log-header">
+                                    <div class="cash-log-info">
+                                        <div class="cash-log-date">Date</div>
+                                        <div class="cash-log-memo">Memo</div>
+                                    </div>
+                                    <div class="cash-log-amount">$0.00</div>
+                                    <div class="cash-log-amount">Balance</div>
+                                </div>
+                            </div>
+                            @* end *@
+                        </div>
+                    </div>
+                    @*  end db results *@
+
+                    <br />
+
+                </div>
+            </div>
+            <div class="full-view" style="display:none;" id="performance-copy">
+                <span class="closeButton"></span>
+                <div class="statistics">
+
+                </div>
+            </div>
+
+
+            <!--<div id="InvestForm" class="mfp-hide white-popup-block">
+                @*@@using (Html.BeginUmbracoForm<InvestorDashboardFormsController>("InvestFormSubmit", FormMethod.Post))*@
+                        {
+                            <div class="row">
+                                <div class="form-group col-12">
+                                    <label class="control-label">Offering</label>
+                                    <select name="offering" class="form-control">
+                                        <option value="none" selected disabled hidden>Select an Offering</option>
+                                        <option>Neigborhood Ventures Fund</option>
+                                <option>Venture on 12th Place</option>-->
+            @*<option>Open Project 3</option>*@
+            <!--</select>
+                                </div>
+                                <div class="form-group col-12">
+                                    <label class="control-label">Total Investment Amount</label>
+                                    <input type="text" id="totalInvestmentAmount" name="totalInvestmentAmount" class="form-control" />
+                                </div>
+                                <div class="form-group col-12">
+                                    <label class="control-label">Cash Account Contribution</label>
+                                    <input type="text" id="cashAccountContribution" name="cashAccountContribution" class="form-control" />
+                                </div>
+                                <div class="form-group col-12">
+                                    <button class="btn btn-lg c3-btn-bg c3-btn-bg-solid c3-btn-bg-hover-solid c3-btn-text c3-btn-borders" type="submit">Submit</button>
+                                </div>
+                            </div>
+                        }
+            </div>-->
+
+            <script>
+                function maximumCheck(theValue) {
+                    if (parseFloat(theValue.value) > parseFloat(theValue.max)) {
+                        document.getElementById('amount').value = theValue.max;
+                    }
+
+                    if (parseFloat(theValue.value) < parseFloat(theValue.min)) {
+                        document.getElementById('amount').value = theValue.min;
+                    }
+                }
+            </script>
+
+            <div id="TransferForm" class="mfp-hide white-popup-block">
+                @using (Html.BeginUmbracoForm<InvestorDashboardFormsController>("TransferFormSubmit", FormMethod.Post, new { id = "TransferFormSubmit" }))
+                {
+                    <h2>Bank Account Details</h2>
+
+                    <div class="row">
+                        @*<input type="text" name="name" id="TransferFormName" value='' style="display:none;" />*@
+                        <div class="form-group col-md-5 col-xs-12">
+                            <label class="control-label">Amount <span style="color:red">*</span></label> @*need to limit this to amount left in their cash available (cashAvailableTotal)*@
+                            <input id="amount" name="amount" type="number" class="form-control" min="0" max="" onkeyup="maximumCheck(this)" />
+                            <span class="field-validation-valid" id="amountError"></span>
+                        </div>
+                        <div class="form-group col-md-7 col-xs-12">
+                            <label class="control-label">Preferred Bank Account</label>
+                            <select id="accountId" name="AccountId" class="form-control">
+                            </select>
+                        </div>
+                    </div>
+                    <div id="bankDetails">
+                        <div class="row">
+                            <div class="form-group col-md-4 col-xs-12">
+                                <label class="control-label req">Name on Account</label>
+                                <input id="nameOnAccount" name="Name" type="text" class="form-control" />
+                                <input id="ProfileId" name="ProfileId" type="hidden" class="form-control" />
+                                <span class="field-validation-valid" id="nameError"></span>
+                            </div>
+                            <div class="form-group col-md-4 col-xs-12">
+                                <label class="control-label req">Name of Bank</label>
+                                <input type="text" id="bankName" name="BankName" class="form-control" />
+                                <span class="field-validation-valid" id="bankNameError"></span>
+                            </div>
+                            <div class="form-group col-md-4 col-xs-12">
+                                <label class="control-label req">Routing #</label>
+                                <input type="text" id="routingNumber" name="RoutingNumber" class="form-control" maxlength="9" />
+                                <span class="field-validation-valid" id="routingError"></span>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="form-group col-md-6 col-xs-12">
+                                <label class="control-label req">Account Type</label>
+                                <select id="checkingOrSavingsAccount" name="CheckingOrSavingsAccount" class="form-control">
+                                    <option>Checking</option>
+                                    <option>Savings Account</option>
+                                </select>
+                            </div>
+                            <div class="form-group col-md-6 col-xs-12">
+                                <label class="control-label req">Entity Type</label>
+                                <select id="personalOrBusinessAccount" name="PersonalOrBusinessAccount" class="form-control">
+                                    <option>Personal</option>
+                                    <option>Business Account</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="form-group col-md-6 col-xs-12">
+                                <label class="control-label req">Account #</label>
+                                <input id="accountNumber" name="AccountNumber" type="text" class="form-control" />
+                                <span class="field-validation-valid" id="accountError"></span>
+                            </div>
+                            <div class="form-group col-md-6 col-xs-12">
+                                <label class="control-label req">Confirm Account #</label>
+                                <input id="confirmAccountNumber" name="ConfirmAccountNumber" type="text" class="form-control" />
+                                <span class="field-validation-valid" id="confirmAccountError"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row" style="display: flex; -ms-flex-wrap: wrap; margin-right: 0px; margin-left: -15px; /*flex-direction: row-reverse;*/">
+                        @*<div class="form-group col-md-1 col-xs-1">
+                                <label>
+                                    <input type="checkbox" name="OneTimeWithdrawal"  id="OneTimeWithdrawal" style=" width: 64px; height: 25px; vertical-align: middle; margin-top: 20px; accent-color: #677A92; ">
+                                </label>
+                            </div>
+                            <div class="form-group col-md-3 col-xs-11">
+                                <label style="font-weight: 400;"> One Time Withdrawal</label>
+                            </div>
+                            <div class="form-group col-md-1 col-xs-1">
+                                <label>
+                                    <input type="checkbox" name="MonthlyReoccuring"  id="MonthlyReoccuring" style=" width: 64px; height: 25px; vertical-align: middle; margin-top: 20px; accent-color: #677A92; ">
+                                </label>
+                            </div>
+                            <div class="form-group col-md-3 col-xs-11">
+                                <label style="font-weight: 400;"> Monthly Reoccuring</label>
+                            </div>*@
+                        <div class="form-group col-md-1 col-xs-1">
+                            <label>
+                                <input type="checkbox" name="WithdrawalType" id="WithdrawalType" style=" width: 64px; height: 25px; vertical-align: middle; margin-top: 10px; accent-color: #677A92; ">
+                            </label>
+                        </div>
+                        <div class="form-group col-md-2 col-xs-3">
+                            <label style="font-weight: 400;" for="WithdrawalType"> Monthly Recurring</label>
+                        </div>
+                        <div class="form-group col-md-4 col-xs-12">
+                            <button style="text-align: center; width: 100%;" class="btn btn-lg c3-btn-bg c3-btn-bg-solid c3-btn-bg-hover-solid c3-btn-text c3-btn-borders" type="submit">Submit</button>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @*<img src="/media/2rypi5cw/picture1.png" />*@
+            <div class="full-view" style="display:none;" id="portfolio-copy">
+                <span class="closeButton"></span>
+
+                <img src="/media/qaopxwl1/slide4_sm.png" />
+            </div>
+
+            <div class="full-view table-fixes" id="cash-account-copy" style="display:none;">
+                <span class="closeButton"></span>
+
+
+                <p>[dynamic data here]</p>
+            </div>
+            @*<div class="preview" id="activity">
+                    <h6>Activity</h6>
+                    <ul class="list-unstyled">
+                        <li><strong>%agentName%</strong> has approved your subscription agreement for <strong>%projectName</strong></li>
+                        <li>Your <strong>%dateTimeStamp%</strong> distribution of <strong>%cashAmount%</strong> has been added to your Cash Account</li>
+                        <li>View new investment, <strong>%projectName%</strong> - <a href="#">Invest Now</a></li>
+                    </ul>
+                </div>
+                <div class="preview" id="documents">
+                    <h6>Documents</h6>
+                    <ul>
+                        <li><a href="#">Subscription Agreement</a></li>
+                        <li><a href="#">2020 K1</a></li>
+                        <li><a href="#">2021 K1</a></li>
+                    </ul>
+                </div>
+                <div class="preview" id="message-center">
+                    <h6>Send Us a Message</h6>
+
+                    @using (Html.BeginUmbracoForm<InvestorDashboardFormsController>("SubmitMessage", FormMethod.Post))
+                    {
+                        <textarea placeholder="Use this to write us a message. Click 'Submit' when done."></textarea>
+                        <button class="btn" type="submit">Submit</button>
+                    }
+
+                </div>*@
+        </div>
+    </div>
+</section>
+
+
+<script>
+
+    var validRoutingNumber = false;
+    //document.getElementById('RoutingNumber').addEventListener('input', function () {
+    //    if (this.value.length == 9) {
+    //        $.ajax({
+    //            method: 'GET',
+    //            url: '/umbraco/Api/FundAmericaApi/GetBankInfo',
+    //            data: {
+    //                RoutingNumber: this.value
+    //            }
+    //        }).done(function (data) {
+    //            if (data.name != null && data.name.length > 0) {
+    //                document.getElementById('bankName').innerHTML = data.name;
+    //                document.getElementById('bankName').style.color = "green";
+    //                validRoutingNumber = true;
+    //            } else {
+    //                document.getElementById('bankName').innerHTML = "Invalid routing number";
+    //                document.getElementById('bankName').style.color = "red";
+    //                validRoutingNumber = false;
+    //            }
+    //        });
+    //    }
+    //});
+
+
+    //document.addEventListener("DOMContentLoaded", function () {
+    //    document.getElementById("TransferFormName").value = document.getElementById("profileSelection").options[document.getElementById("profileSelection").selectedIndex].text;
+    //});
+
+    document.addEventListener("DOMContentLoaded", function () {
+        document.getElementById('accountId').addEventListener('change', function () {
+            document.getElementById('bankDetails').style.display = document.getElementById('accountId').value == '' ? null : 'none';
+        });
+    });
+
+    var amountError = document.getElementById('amountError');
+    var nameError = document.getElementById('nameError');
+    var bankNameError = document.getElementById('bankNameError');
+    var accountError = document.getElementById('accountError');
+    var confirmError = document.getElementById('confirmAccountError');
+    var routingError = document.getElementById('routingError');
+    var accountId = document.getElementById('accountId');
+    document.querySelector('#TransferForm form').addEventListener('submit', function (evt) {
+        evt.preventDefault();
+
+        var account = accountId.value;
+        amountError.classList.replace("field-validation-error", "field-validation-valid");
+        nameError.classList.replace("field-validation-error", "field-validation-valid");
+        bankNameError.classList.replace("field-validation-error", "field-validation-valid");
+        accountError.classList.replace("field-validation-error", "field-validation-valid");
+        confirmError.classList.replace("field-validation-error", "field-validation-valid");
+        routingError.classList.replace("field-validation-error", "field-validation-valid");
+        var isValid = true;
+        if (document.getElementById('amount').value == "") {
+            amountError.classList.replace("field-validation-valid", "field-validation-error");
+            amountError.innerText = "The 'Amount' field is required";
+            isValid = false;
+        }
+        if (account == '') {
+            if (document.getElementById('nameOnAccount').value == "") {
+                nameError.classList.replace("field-validation-valid", "field-validation-error");
+                nameError.innerText = "The 'Name on Account' field is required";
+                isValid = false;
+            }
+            if (document.getElementById('bankName').value == "") {
+                bankNameError.classList.replace("field-validation-valid", "field-validation-error");
+                bankNameError.innerText = "The 'Bank Name' field is required";
+                isValid = false;
+            }
+            if (document.getElementById('accountNumber').value == "") {
+                accountError.classList.replace("field-validation-valid", "field-validation-error");
+                accountError.innerText = "The 'Account #' field is required";
+                isValid = false;
+            }
+            if (document.getElementById('confirmAccountNumber').value == "") {
+                confirmError.classList.replace("field-validation-valid", "field-validation-error");
+                confirmError.innerText = "Account # must be confirmed";
+                isValid = false;
+            }
+            if (document.getElementById('confirmAccountNumber').value != document.getElementById('accountNumber').value) {
+                confirmError.classList.replace("field-validation-valid", "field-validation-error");
+                confirmError.innerText = "Account numbers must match";
+                isValid = false;
+            }
+            if (document.getElementById('routingNumber').value.length < 9) {
+                routingError.classList.replace("field-validation-valid", "field-validation-error");
+                routingError.innerText = "A valid 'Routing #' field is required";
+                isValid = false;
+            }
+        }
+        if (isValid)
+            document.querySelector('#TransferForm form').submit();
+    });
+
+
+    function buildInvestmentsTableResults(data) {
+        var InvestmentsTotal = 0;
+        var InvestmentsTable = $(".changingValuesInvestment")[1];
+        InvestmentsTable.innerHTML = ``;
+        // offeringDropdown select by offering
+        for (var i = 0; i < data.length; i++) {
+            var d = data[i];
+            var numparsed = Number.parseFloat(d.Amount);
+            InvestmentsTotal += numparsed;
+            var status = d.status;
+            if (d.status == 'completed') {
+                // Completed
+                status = "<p style='color:#6CA437; font-weight: 500;'>Completed</p>";
+            }
+            if (d.status == 'pending') {
+                // Pending
+                status = "<p style='color:#debe4b; font-weight: 500;'>Pending</p>";
+            }
+            if (d.status == 'cancelled') {
+                // cancelled
+                status = "<p style='font-weight: 500;'>Cancelled</p>";
+            }
+            InvestmentsTable.innerHTML += `<div class="cash-log-item"><div class="cash-log-info"><div class="cash-log-date">` + d.FormattedDate + `</p></div><div class="cash-log-project">` + d.offeringName + `</p></div><div class="cash-log-status">` + status + `</div><div class="cash-log-amount">` + fmt.format(d.Amount) + `</p></div></div></div>`;
+        }
+
+
+        var InvestmentsTableMobile = $(".changingValuesInvestment")[0];
+        InvestmentsTableMobile.innerHTML = ``;
+        //if (data.length == 0)
+        //    vm.filteredItems = [];
+        for (var i = 0; i < data.length; i++) {
+            var d = data[i];
+            var numparsed = Number.parseFloat(d.Amount);
+            InvestmentsTotal += numparsed;
+
+            var status = d.status;
+            if (d.status == 'completed') {
+                // Completed
+                status = "<p style='color:#6CA437; font-weight: 500;'>Completed</p>";
+            }
+
+            if (d.status == 'pending') {
+                // Pending
+                status = "<p style='color:#debe4b; font-weight: 500;'>Pending</p>";
+            }
+            if (d.status == 'cancelled') {
+                // cancelled
+                status = "<p style='font-weight: 500;'>Cancelled</p>";
+
+            }
+
+            InvestmentsTableMobile.innerHTML += `<div class="cash-log-item"><div class="cash-log-info"><div class="cash-log-date">` + d.FormattedDate + `</p></div><div class="cash-log-project">` + d.offeringName + `</p></div><div class="cash-log-status">` + status + `</p></div><div class="cash-log-amount">` + fmt.format(d.Amount) + `</p></div></div></div>`;
+        }
+    }
+
+    function buildInvestmentsTable(data) {
+        var InvestmentsTotal = 0;
+
+        var InvestmentsTable = $(".YourInvestmentsTable")[1];
+        var changingValues = $(".changingValuesInvestment")[1];
+        InvestmentsTable.innerHTML = `<div class="cash-log-header">
+                                                <div class="cash-log-date">Date</div>
+                                                <div class="cash-log-project">Project</div>
+<div class="statusContainer">
+                                                <select class="statusDropdown"  style="padding: 7px; outline: none; background-color: transparent; color: white; width: 100%;">
+                                                    <option style="color: white; background-color:#677A92; font-weight: 700; display: none;" value="Default" selected>Status&nbsp; </option>
+                                                    <option style="color: black;" value="All">View All</option>
+                                                    <option style="color: black;" value="completed">Completed</option>
+                                                    <option style="color: black;" value="cancelled">Cancelled</option>
+                                                    <option style="color: black;" value="pending">Pending</option>
+                                                </select>
+</div>
+                                                <div class="cash-log-amount">Investment</div></div>
+<div class="changingValuesInvestment">
+
+                                            </div>`;
+
+        // offeringDropdown select by offering
+
+        for (var i = 0; i < data.length; i++) {
+            var d = data[i];
+            var numparsed = Number.parseFloat(d.Amount);
+            InvestmentsTotal += numparsed;
+
+            var status = d.status;
+            if (d.status == 'completed') {
+                // Completed
+                status = "<p style='color:#6CA437; font-weight: 500;'>Completed</p>";
+            }
+
+            if (d.status == 'pending') {
+                // Pending
+                status = "<p style='color:#debe4b; font-weight: 500;'>Pending</p>";
+            }
+            if (d.status == 'cancelled') {
+                // cancelled
+                status = "<p style='font-weight: 500;'>Cancelled</p>";
+
+            }
+
+
+            changingValues.innerHTML += `
+                                                                                                                                    <div class="cash-log-item">
+                                                                                                                                        <div class="cash-log-info">
+                                                                                                                                            <div class="cash-log-date">` + d.FormattedDate + `</p></div>
+                                                                                                                                            <div class="cash-log-project">` + d.offeringName + `</p></div>
+                                                                                                                                            <div class="cash-log-status">` + status + `</div>
+                                                                                                                                            <div class="cash-log-amount">` + fmt.format(d.Amount) + `</p></div>
+                                                                                                                                        </div>
+                                                                                                                                    </div> <div class="changingValuesInvestment">
+
+                                            </div>`;
+
+        }
+        $(".changingValuesInvestment")[1].innerHTML = changingValues.innerHTML
+
+
+
+        var InvestmentsTableMobile = $(".YourInvestmentsTable")[0];
+        var changingValuesMobile = $(".changingValuesInvestment")[0];
+
+        changingValuesMobile.innerHTML = ``;
+        //if (data.length == 0)
+        //    vm.filteredItems = [];
+        for (var i = 0; i < data.length; i++) {
+            var d = data[i];
+            var numparsed = Number.parseFloat(d.Amount);
+            InvestmentsTotal += numparsed;
+
+            var status = d.status;
+            if (d.status == 'completed') {
+                // Completed
+                status = "<p style='color:#6CA437; font-weight: 500;'>Completed</p>";
+            }
+
+            if (d.status == 'pending') {
+                // Pending
+                status = "<p style='color:#debe4b; font-weight: 500;'>Pending</p>";
+            }
+            if (d.status == 'cancelled') {
+                // cancelled
+                status = "<p style='font-weight: 500;'>Cancelled</p>";
+
+            }
+
+            changingValuesMobile.innerHTML += `
+                                                                                                                                    <div class="cash-log-item">
+                                                                                                                                        <div class="cash-log-info">
+                                                                                                                                            <div class="cash-log-date">` + d.FormattedDate + `</p></div>
+                                                                                                                                            <div class="cash-log-project">` + d.offeringName + `</p></div>
+                                                                                                                                            <div class="cash-log-status">` + status + `</p></div>
+                                                                                                                                            <div class="cash-log-amount">` + fmt.format(d.Amount) + `</p></div>
+                                                                                                                                    </div>
+                                                                                                                                    </div>`;
+        }
+        $(".changingValuesInvestment")[0] = changingValuesMobile.innerHTML;
+    }
+
+
+    function buildCashAvailableTable(datajsonversion, OfferingFilter, desktop) {
+        var cashAvailableTotal = 0;
+        var cashAvailableTotalMobile = 0;
+        var cashAvailableTable = $("#cash-account-copy #CashAvailableTable")[0];
+        var CashAvailableTableInner = $("#cash-account-copy #CashAvailableTable .CashAvailableTableResults")[0];
+        var OfferingFilterSelected = document.getElementsByClassName("offeringDropdown")[1].selectedOptions[0].innerHTML // getting desktop dropdown value
+
+        if (desktop) {
+            // HEADING LOGIC
+            if (OfferingFilter == undefined) {
+
+                if (OfferingFilterSelected == 'View All') {
+                    cashAvailableTable.innerHTML = `<div class="cash-log-header">
+                                            <div class="cash-log-info">
+                                            <div class="cash-log-date">Date</div>
+                                            <div class="cash-log-memo">Memo</div>
+                                            </div>
+                                            <div class="cash-log-amount" id="tableCashAvailableTotalMobile">$0.00</div>
+                                            <div class="cash-log-balance" id="tableCashAvailableTotalMobile">Balance</div>
+                                            </div> <div class="CashAvailableTableResults"> </div>`;
+                }
+
+                else {
+                    cashAvailableTable.innerHTML = `<div class="cash-log-header">
+                                            <div class="cash-log-info">
+                                            <div class="cash-log-date">Date</div>
+                                            <div class="cash-log-memo">Memo</div>
+                                            </div>
+                                            <div class="cash-log-amount" id="tableCashAvailableTotalMobile">$0.00</div>
+                                            </div> <div class="CashAvailableTableResults"> </div>`;
+                }
+
+                CashAvailableTableInner = $("#cash-account-copy #CashAvailableTable .CashAvailableTableResults")[0];
+            }
+            // END HEADING LOGIC
+            // populate the desktop
+            CashAvailableTableInner.innerHTML = "";
+
+
+            for (var i = 0; i < datajsonversion.length; i++) {
+                var d = datajsonversion[i];
+                var numparsed = Number.parseFloat(d.Amount);
+                cashAvailableTotal += numparsed;
+
+                if (OfferingFilterSelected == 'View All') {
+                    CashAvailableTableInner.innerHTML += `<div class="cash-log-item">
+                                                      <div class="cash-log-info">
+                                                      <div class="cash-log-date">` + d.FormattedDate + `</div>
+                                                      <div class="cash-log-memo">` + d.Memo + `</div>
+                                                      </div>
+                                                      <div class="cash-log-amount">` + fmt.format(d.Amount) + `</div>
+                                                      <div class="cash-log-balance">` + fmt.format(d.Balance) + `</div>
+                                                      </div>`;
+                    $('.cash-log-header .cash-log-balance')[1].style.display = 'inline-block'
+                }
+                else {
+
+                    CashAvailableTableInner.innerHTML += `<div class="cash-log-item">
+                                                      <div class="cash-log-info">
+                                                      <div class="cash-log-date">` + d.FormattedDate + `</div>
+                                                      <div class="cash-log-memo">` + d.Memo + `</div>
+                                                      </div>
+                                                      <div class="cash-log-amount">` + fmt.format(d.Amount) + `</div>
+                                                      </div>`;
+
+                    $('.cash-log-header .cash-log-balance')[1].style.display = 'none'
+                }
+            }
+
+            if (OfferingFilter == undefined) {
+                document.getElementById("cashAvailableTotal").innerText = fmt.format(cashAvailableTotal); //
+            }
+            document.querySelector("#cash-account #tableCashAvailableTotal").innerText = fmt.format(cashAvailableTotal);
+            if (OfferingFilter == undefined) {
+
+            }
+            document.getElementById("tableCashAvailableTotal").innerText = fmt.format(cashAvailableTotal);
+            if (document.querySelector("#cash-account-copy #tableCashAvailableTotal") != null)
+                document.querySelector("#cash-account-copy #tableCashAvailableTotal").innerText = fmt.format(cashAvailableTotal);
+            else {
+                document.querySelector("#cash-account-copy #tableCashAvailableTotalMobile").innerText = fmt.format(cashAvailableTotal);
+            }
+
+            if (pendingTotal == undefined)
+                pendingTotal = 0;
+            document.getElementById("amount").max = cashAvailableTotal - pendingTotal; // need to make sure pending transfer are subtracted from this
+            document.getElementById("ProfileId").value = parseInt(document.getElementById("profileSelection").value)
+
+        }
+
+
+        // mobile
+        else {
+            var cashAvailableTableMobile = $("#cash-account #CashAvailableTable")[0];
+            var CashAvailableTableInnerMobile = $("#cash-account #CashAvailableTable .CashAvailableTableResults")[0];
+            var OfferingFilterSelected = document.getElementsByClassName("offeringDropdown")[0].selectedOptions[0].innerHTML // getting mobile dropdown value
+
+            // get the cashavailabletable // mobile
+            CashAvailableTableInnerMobile.innerHTML = "";
+            for (var i = 0; i < datajsonversion.length; i++) {
+                var d = datajsonversion[i];
+                var numparsed = Number.parseFloat(d.Amount);
+                cashAvailableTotalMobile += numparsed;
+
+                if (OfferingFilterSelected == 'View All') {
+                    CashAvailableTableInnerMobile.innerHTML += `<div class="cash-log-item">
+                                                       <div class="cash-log-info">
+                                                       <div class="cash-log-date">` + d.FormattedDate + `</div>
+                                                       <div class="cash-log-memo">` + d.Memo + `</div>
+                                                       </div>
+                                                       <div class="cash-log-amount">` + fmt.format(d.Amount) + `</div>
+                                                       <div class="cash-log-balance">` + fmt.format(d.Balance) + `</div>
+                                                       </div>`;
+                    $('.cash-log-header .cash-log-balance')[0].style.display = 'inline-block'
+                }
+
+                else {
+                    CashAvailableTableInnerMobile.innerHTML += `<div class="cash-log-item">
+                                                      <div class="cash-log-info">
+                                                      <div class="cash-log-date">` + d.FormattedDate + `</div>
+                                                      <div class="cash-log-memo">` + d.Memo + `</div>
+                                                      </div>
+                                                      <div class="cash-log-amount">` + fmt.format(d.Amount) + `</div>
+                                                      </div>`;
+                    $('.cash-log-header .cash-log-balance')[0].style.display = 'none'
+                }
+
+            }
+            if (OfferingFilter == undefined) {
+                document.getElementById("cashAvailableTotal").innerText = fmt.format(cashAvailableTotalMobile);
+            }
+            document.getElementById("tableCashAvailableTotal").innerText = fmt.format(cashAvailableTotalMobile);
+            if (pendingTotal == undefined)
+                pendingTotal = 0;
+            document.getElementById("amount").max = cashAvailableTotalMobile - pendingTotal; // need to make sure pending transfer are subtracted from this
+            document.getElementById("ProfileId").value = parseInt(document.getElementById("profileSelection").value)
+        }
+
+
+    }
+
+    function populateOfferingDropdown() {
+        $.ajax({
+            url: '/umbraco/api/investorapi/GetOfferingsByProfileId',
+            method: 'GET',
+            data: {
+                profileId: parseInt(document.getElementById("profileSelection").value)
+            },
+            dataType: 'json'
+        }).done(function (data) {
+            // build the table
+            var select = document.getElementsByClassName("offeringDropdown");
+            select[0].innerHTML = "";
+            select[1].innerHTML = "";
+            var theDistributionOption = document.createElement("option");
+            theDistributionOption.innerHTML = "View All";
+            theDistributionOption.value = "View All";
+
+            var theDistributionOptionMobile = document.createElement("option");
+            theDistributionOptionMobile.innerHTML = "View All";
+            theDistributionOptionMobile.value = "View All";
+
+            select[0].appendChild(theDistributionOptionMobile);
+            select[1].appendChild(theDistributionOption);
+            for (var i = 0; i < data.length; i++) {
+                var d = data[i];
+                for (z = 0; z < select.length; z++) {
+                    var theOfferingOption = document.createElement("option");
+                    //theOfferingOption.textContent = d.offeringName;
+                    theOfferingOption.innerHTML = d.OfferingName;
+                    theOfferingOption.value = d.OfferingId;
+                    select[z].appendChild(theOfferingOption);
+                }
+            }
+            // populate the offeringId's in offeringDropdown
+        });
+    }
+
+    //$.ajax('/umbraco/api/investorapi/ListAccounts?profileId=' + id, {
+    //    method: 'POST'
+    //}).done(function (data) {
+    //    console.log(data);
+    //});
+
+</script>
