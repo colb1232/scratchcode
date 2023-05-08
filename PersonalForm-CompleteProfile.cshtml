@@ -1,0 +1,495 @@
+@using USNWebsite.USNControllers;
+@using Demo.App_Code.USNControllers;
+@using UmbracoBase.App_Code;
+@model MemberModel
+
+
+@Html.Action("getMember","MemberCustomSurface")
+@{ 
+
+    IPublishedContent member = (IPublishedContent)TempData["CurrentMember"];
+    //var memberService = Services.MemberService;
+    //var currMember = Members.GetCurrentMember();
+
+    string state = "";
+    if (member.HasValue("State"))
+    {
+        state = (string)member.GetProperty("State").Value();
+    }
+
+    string phone = "";
+    if (member.HasValue("Phone"))
+    {
+        phone = (string)member.GetProperty("Phone").Value();
+    }
+}
+
+
+            <div id="TourId" class="inner c4-bg c4-bg-solid c4-text" @*style="margin: 0px 20px; max-width: 400px; margin: auto;*@ }">
+                @using (Html.BeginUmbracoForm<MemberCustomSurfaceController>("SubmitUpdate", FormMethod.Get, new { @id = "frmClassPurchase" }))
+                {
+                    <h2 style="text-align: center; margin: 0; padding: 0;">Step <span id="stepNumber">1</span> of 3</h2>
+                    <div style="width: 100%; height: 10px; border-radius: 20px; background-color: #F1F1F1; margin: 6px 0px; ">
+                        <div id="StatusBarStep" style="background-color: #677A92; height:10px; border-radius:20px; width:0px;"></div>
+                    </div>
+                    <br />
+                }
+            </div>
+
+<section class="content component base-bg base-bg-solid" style="padding-top: 0px !important;">
+    <div class="row component base-bg base-bg-solid" style="padding-top:0px !important;">
+        <div class="container" style="margin-bottom: 20px;">
+            <div id="TourId" class="inner c4-bg c4-bg-solid c4-text" style="margin: 0px 20px; max-width: 400px; margin: auto; }">
+                @using (Html.BeginUmbracoForm<MemberCustomSurfaceController>("SubmitUpdate", FormMethod.Get, new { @id = "frmClassPurchase" }))
+                {     
+                    if (TempData["Error"] != null)
+                    {
+                        <div style="margin:20px 0px;">
+                            <span class="alert alert-success">@TempData["Error"]</span>
+                        </div>
+                    }
+            <div id="step1">
+                <div class="form-group">
+                    <label>
+                        Address <em class="req"> *</em>
+                    </label>
+                    @Html.TextBoxFor(x => x.Address, new { @class = "form-control", placeholder = "Enter your street address" })
+                    @Html.ValidationMessageFor(x => x.Address, "Please enter a valid street address.")
+                </div>
+
+                <div class="form-group">
+                    <label>Address 2 (optional) </label>
+                    @Html.TextBoxFor(x => x.Address2, new { @class = "form-control", placeholder = "Enter additional address information (e.g., building name, suite number)" })
+                    @Html.ValidationMessageFor(x => x.Address2)
+                </div>
+
+                <div class="form-group">
+
+                    <label>City <em class="req"> *</em></label>
+                    @Html.TextBoxFor(x => x.City, new { @class = "form-control", placeholder = "Enter your city or town" })
+                    @Html.ValidationMessageFor(x => x.City, "Please enter a valid city name.")
+                </div>
+                <div class="form-group">
+
+                    @*/ need to prepopulate the state if the member already has that info*@
+
+                    <label>State <em class="req"> *</em></label>
+                    @Html.DropDownList("State", new List<SelectListItem>
+                    {
+                        new SelectListItem() {Text = "Alabama", Value = "AL"},
+                        new SelectListItem() {Text = "Alaska", Value = "AK"},
+                        new SelectListItem() {Text = "Arizona", Value = "AZ"},
+                        new SelectListItem() {Text = "Arkansas", Value = "AR"},
+                        new SelectListItem() {Text = "California", Value = "CA"},
+                        new SelectListItem() {Text = "Colorado", Value = "CO"},
+                        new SelectListItem() {Text = "Connecticut", Value = "CT"},
+                        new SelectListItem() {Text = "District of Columbia", Value = "DC"},
+                        new SelectListItem() {Text = "Delaware", Value = "DE"},
+                        new SelectListItem() {Text = "Florida", Value = "FL"},
+                        new SelectListItem() {Text = "Georgia", Value = "GA"},
+                        new SelectListItem() {Text = "Hawaii", Value = "HI"},
+                        new SelectListItem() {Text = "Idaho", Value = "ID"},
+                        new SelectListItem() {Text = "Illinois", Value = "IL"},
+                        new SelectListItem() {Text = "Indiana", Value = "IN"},
+                        new SelectListItem() {Text = "Iowa", Value = "IA"},
+                        new SelectListItem() {Text = "Kansas", Value = "KS"},
+                        new SelectListItem() {Text = "Kentucky", Value = "KY"},
+                        new SelectListItem() {Text = "Louisiana", Value = "LA"},
+                        new SelectListItem() {Text = "Maine", Value = "ME"},
+                        new SelectListItem() {Text = "Maryland", Value = "MD"},
+                        new SelectListItem() {Text = "Massachusetts", Value = "MA"},
+                        new SelectListItem() {Text = "Michigan", Value = "MI"},
+                        new SelectListItem() {Text = "Minnesota", Value = "MN"},
+                        new SelectListItem() {Text = "Mississippi", Value = "MS"},
+                        new SelectListItem() {Text = "Missouri", Value = "MO"},
+                        new SelectListItem() {Text = "Montana", Value = "MT"},
+                        new SelectListItem() {Text = "Nebraska", Value = "NE"},
+                        new SelectListItem() {Text = "Nevada", Value = "NV"},
+                        new SelectListItem() {Text = "New Hampshire", Value = "NH"},
+                        new SelectListItem() {Text = "New Jersey", Value = "NJ"},
+                        new SelectListItem() {Text = "New Mexico", Value = "NM"},
+                        new SelectListItem() {Text = "New York", Value = "NY"},
+                        new SelectListItem() {Text = "North Carolina", Value = "NC"},
+                        new SelectListItem() {Text = "North Dakota", Value = "ND"},
+                        new SelectListItem() {Text = "Ohio", Value = "OH"},
+                        new SelectListItem() {Text = "Oklahoma", Value = "OK"},
+                        new SelectListItem() {Text = "Oregon", Value = "OR"},
+                        new SelectListItem() {Text = "Pennsylvania", Value = "PA"},
+                        new SelectListItem() {Text = "Rhode Island", Value = "RI"},
+                        new SelectListItem() {Text = "South Carolina", Value = "SC"},
+                        new SelectListItem() {Text = "South Dakota", Value = "SD"},
+                        new SelectListItem() {Text = "Tennessee", Value = "TN"},
+                        new SelectListItem() {Text = "Texas", Value = "TX"},
+                        new SelectListItem() {Text = "Utah", Value = "UT"},
+                        new SelectListItem() {Text = "Vermont", Value = "VT"},
+                        new SelectListItem() {Text = "Virginia", Value = "VA"},
+                        new SelectListItem() {Text = "Washington", Value = "WA"},
+                        new SelectListItem() {Text = "West Virginia", Value = "WV"},
+                        new SelectListItem() {Text = "Wisconsin", Value = "WI"},
+                        new SelectListItem() {Text = "Wyoming", Value = "WY"}
+                    }, "Select State", new { @class = "form-control", placeholder = "Enter your state or province" })
+                    @Html.ValidationMessageFor(x => x.State, "Please select a valid state from the dropdown list.")
+                </div>
+                <script>
+                    document.addEventListener("DOMContentLoaded", function () {
+                        // set the state if available
+                        document.getElementById("State").value = '@state';
+                    })
+                </script>
+                <div class="form-group">
+
+                    <label>ZIP Code <em class="req"> *</em></label>
+                    @Html.TextBoxFor(x => x.ZipCode, new { @class = "form-control", placeholder = "Enter your ZIP Code or postal code" })
+                    @Html.ValidationMessageFor(x => x.ZipCode, "Please enter a valid 5-digit ZIP code.")
+                </div>
+
+                <div class="form-group">
+                    <label>Phone </label>
+                    @Html.TextBoxFor(x => x.Phone, new { @class = "form-control", onkeyup = "formatPhoneNumber()", placeholder = "Enter your phone number (e.g., (555) 555-5555)" })
+                    @Html.ValidationMessageFor(x => x.Phone, "")
+                </div>
+                <script>
+                        document.addEventListener("DOMContentLoaded", function () {
+                            // set the phone if available
+                            document.getElementById("Phone").value = '@phone';
+                        })
+
+                        function formatPhoneNumber() {
+                            var phoneNumber = document.getElementById("Phone").value;
+                            var formattedPhoneNumber = phoneNumber.replace(/(\d{3})(\d{3})(\d{4})/, "($1)-$2-$3");
+                            document.getElementById("Phone").value = formattedPhoneNumber;
+                        }
+                </script>
+
+                <div class="form-group">
+                    <label>Date of Birth <em class="req"> *</em></label>
+                    <label style="font-size:10px; font-style:italic;">Must be 18 years or older to invest</label>
+                    @Html.TextBoxFor(x => x.DateOfBirth, new { @class = "form-control", type = "date", placeholder = "Enter your date of birth in the format MM/DD/YYYY", max = DateTime.Now.AddYears(-18).ToString("yyyy-MM-dd") })
+                    @Html.ValidationMessageFor(x => x.DateOfBirth, "We're sorry, but you must be at least 18 years old to invest. Please come back and invest with us when you meet the age requirement. Thank you for your interest!")
+                </div>
+
+                @* store this wherever we were storing it later *@
+
+
+
+                <div class="form-group">
+                    <label>Social Security Number <em class="req"> *</em></label>
+                    @Html.TextBoxFor(x => x.SocialSecurity, new { @class = "form-control", placeholder = "SSN is required to verify your identity and protect against fraud", maxlength = "9", minlength = "9", onkeyup = "removeDashes(this);" })
+                    @Html.ValidationMessageFor(x => x.SocialSecurity, "SSN is required to verify your identity and protect against fraud.")
+                </div>
+
+                <script>
+                    function removeDashes(input) {
+                        // Remove any non-numeric characters (e.g. dashes)
+                        input.value = input.value.replace(/\D/g, '');
+                    }
+                </script>
+
+
+
+                @* need to add the additional fields here jesse *@
+                @* city - already have it
+        country
+        date_of_birth
+        email - automatically grabbed from the account associated with this member
+        name - automatically grabbed from the account associated with this member
+        phone - automatically grabbed from the account associated with this member
+
+        region - automatically grabbed from the account associated with this member
+
+
+
+
+
+
+
+
+                *@
+                @* make sure they are non editable once done since they are required by fund america
+        Address, City, State, Zip we are asking for, but we're not asking for Date of Birth for an individual or a Contact Name for a company (LLC). The LLC type will also need what state/region they are formed in.
+
+        - Also a question - we are assuming that the country will always be "US." Is that correct?
+
+                *@
+
+                <a class="form-control btn btn-lg c3-btn-bg c3-btn-bg-solid c3-btn-bg-hover-solid c3-btn-text c3-btn-borders" onclick="goForward()"> <span></span>Continue </a>
+            </div>
+            <div id="step2">
+                <div class="form-group">
+                    @*
+        // ACCREDITED QUESTIONS
+        (i) have an annual income exceeding
+        $200,000 for at least the last two years
+        (ii) have a joint annual income with a
+        spouse exceeding $300,000 for at least
+        the last two years
+        (iii) have an individual or spousal joint
+        net worth exceeding $1 million
+
+        // NOT ACCREDITTED
+        need to add net worth and income
+
+                    *@
+                    <div class="mfp-hide white-popup-block" id="accreditedInvestorPopup">
+                        <h2>Are You an Accredited Investor?</h2>
+                        <p>To invest in certain opportunities, you must be an accredited investor. You qualify if:</p>
+                        <ul>
+                            <li>You have had an annual income exceeding $200,000 for the last two years</li>
+                            <li>You have had a joint annual income with a spouse exceeding $300,000 for the last two years</li>
+                            <li>You have an individual or spousal joint net worth exceeding $1 million</li>
+                        </ul>
+                        <p>Please note that these requirements are set by law and cannot be waived.</p>
+                    </div>
+
+
+                    <label class="control-label">
+                        Are you an accredited investor?  <a href="#accreditedInvestorPopup" class="tipmodal"> <i class="fa fa-question-circle" aria-hidden="true"></i><i class="icon usn_ion-ios-search search-icon" title="An Accredited investor is..." style="cursor:pointer; max-width:20px;"> </i></a>
+                    </label>
+
+                    @Html.RadioButtonFor(x => x.AccreditationStatus, "Accredited", new { onclick = "document.getElementById('additionalQuestions').style.display = 'block'; document.getElementById('additionalQuestionsNotAccreditted').style.display = 'none'; " }) Yes
+                    <br />
+                    @Html.RadioButtonFor(x => x.AccreditationStatus, "Non-accredited", new { onclick = "document.getElementById('additionalQuestions').style.display = 'none'; document.getElementById('additionalQuestionsNotAccreditted').style.display = 'block';  document.getElementById('annualIncomeExceedTwoHundred').checked = false;document.getElementById('jointIncomeExceedThreehundred').checked = false;document.getElementById('individualOrSpouseExceedMillion').checked = false;" }) No
+
+                </div>
+
+
+                <script defer>
+
+
+                    document.addEventListener("DOMContentLoaded", function () {
+                        // magnific popup
+                        $('.tipmodal').magnificPopup({
+                            delegate: 'a', // child items selector, by clicking on it popup will open
+                            //  type: 'image'
+                            // other options
+                        });
+
+                        $('.tipmodal').magnificPopup({
+                            //type: 'image'
+                            //type: inline
+                            // other options
+                        });
+
+                    });
+
+                </script>
+
+                @* make them all the same *@
+                <div class="form-group" id="additionalQuestions" style="display:none;">
+                    <hr />
+
+                    @*@Html.RadioButtonFor(x => x.netWorthOverMillion, "netWorthOverMillion") My net worth is over $1 million, excluding my home.
+            <br />
+            <br />
+            @Html.RadioButtonFor(x => x.netWorthOverMillion, "netWorthOverTwoHundred") My personal income was more than $200k (or $300k if I filed jointly) for the past two years, and I expect the same income this year.
+            <br />
+            <br />
+            @Html.RadioButtonFor(x => x.netWorthOverMillion, "accreditedBusinessOrFirm") I invest on behalf of an accredited businesss or Venture Capital firm.*@
+
+
+                    @* new questions *@
+                    @Html.RadioButtonFor(x => x.annualIncomeExceedTwoHundred, "annualIncomeExceedTwoHundred") I have an annual income exceeding
+                    $200,000 for at least the last two years.
+                    <br />
+                    <br />
+                    @Html.RadioButtonFor(x => x.jointIncomeExceedThreehundred, "jointIncomeExceedThreehundred") I have a joint annual income with a
+                    spouse exceeding $300,000 for at least
+                    the last two years.
+                    <br />
+                    <br />
+                    @Html.RadioButtonFor(x => x.individualOrSpouseExceedMillion, "individualOrSpouseExceedMillion") I have an individual or spousal joint
+                    net worth exceeding $1 million.
+
+                </div>
+                <div class="form-group" id="additionalQuestionsNotAccreditted" style="display:none;">
+                    <hr />
+                    <label>What is your annual income? <em class="req"> *</em></label>
+                    <label style="font-size:12px; font-style:italic;">Required for certain investments</label>
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text">$</span>
+                        </div>
+                        @*<input type="text" id="income" name="income" class="form-control" min="1000" max="5000000" placeholder="Please enter your annual income">*@
+                        @Html.TextBoxFor(x => x.income, new { @class = "form-control", placeholder = "Please enter your annual income", id = "income" })
+                        @Html.ValidationMessageFor(x => x.income, "")
+                    </div>
+                    <label>What is your net worth? <em class="req"> *</em></label>
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text">$</span>
+                        </div>
+                        @*<input type="text" id="netWorth" name="netWorth" class="form-control" min="1000" max="5000000" placeholder="Please enter your net worth">*@
+                        @Html.TextBoxFor(x => x.netWorth, new { @class = "form-control", placeholder = "Please enter your net worth", id = "netWorth"})
+                        @Html.ValidationMessageFor(x => x.netWorth, "")
+                    </div>
+                </div>
+
+
+                @*<div class="btn base-btn-bg base-btn-bg-solid base-btn-bg-hover-solid base-btn-text base-btn-borders" onclick="goBack()"> Go Back </div>*@
+                <a class="form-control btn btn-lg c3-btn-bg c3-btn-bg-solid c3-btn-bg-hover-solid c3-btn-text c3-btn-borders" onclick="goForward()"><span></span> Continue </a>
+            </div>
+            <div id="step3">
+                @*<div class="form-group">
+            <label>How did you hear about us? <em class="req">*</em></label>
+            @Html.DropDownList("HowTheyHeardAboutUs", new List<SelectListItem>
+            {
+              new SelectListItem() {Text = "ABI", Value = "ABI"},
+              new SelectListItem() {Text = "Arizona Republic/AZ Central", Value = "Arizona Republic/AZ Central"},
+              new SelectListItem() {Text = "AZREIA", Value = "AZREIA"},
+              new SelectListItem() {Text = "Email", Value = "Email"},
+              new SelectListItem() {Text = "Facebook", Value = "Facebook"},
+              new SelectListItem() {Text = "Financial Advisor", Value = "FinancialAdvisor"},
+              new SelectListItem() {Text = "Friend", Value = "Friend"},
+              new SelectListItem() {Text = "Google", Value = "Google"},
+              new SelectListItem() {Text = "Instagram", Value = "Instagram"},
+              new SelectListItem() {Text = "Linkedin", Value = "Linkedin"},
+              new SelectListItem() {Text = "Mailer", Value = "Mailer"},
+              new SelectListItem() {Text = "N/A", Value = "N/A"},
+              new SelectListItem() {Text = "NV Team", Value = "NV Team"},
+              new SelectListItem() {Text = "Other", Value = "Other"},
+              new SelectListItem() {Text = "Phoenix Business Journal", Value = "Phoenix Business Journal"},
+              new SelectListItem() {Text = "Podcast", Value = "Podcast"},
+              new SelectListItem() {Text = "Radio", Value = "Radio"},
+              new SelectListItem() {Text = "TV", Value = "TV"},
+              new SelectListItem() {Text = "TikTok", Value = "TikTok"},
+              new SelectListItem() {Text = "Youtube", Value = "Youtube"}
+
+            }, "How did you hear about us?", new { @class = "form-control" })
+        </div>*@
+
+
+                <p>By Completing your Profile you agree to our <a href="https://neighborhood.ventures/terms-conditions/">Terms & Conditions</a> and <a href="https://neighborhood.ventures/privacy-policy/">Privacy Policy</a> and are self-certifying your Accreditation</p>
+
+
+                <div class="btn-action text-center">
+                    <button type="submit" class="form-control btn btn-lg c3-btn-bg c3-btn-bg-solid c3-btn-bg-hover-solid c3-btn-text c3-btn-borders" id="reserveTourBtn">
+
+                        <span></span>
+                        Complete Profile
+                    </button>
+                </div>
+
+                @*<a class="form-control btn btn-lg c3-btn-bg c3-btn-bg-solid c3-btn-bg-hover-solid c3-btn-text c3-btn-borders" onclick="goForward()"><span></span> Continue </a>*@
+            </div>
+            <div id="step4">
+
+                </div>
+
+                }
+            </div>
+        </div>
+    </div>
+</section>
+<script>
+    var currentPage = 0;
+    var stepNumber = document.getElementById("stepNumber");
+    stepNumber.textContent = 1;
+
+    document.addEventListener("DOMContentLoaded", function () {
+        // add steps using step1,step2,step3,step4
+        var step1 = document.getElementById("step1");
+        var step2 = document.getElementById("step2");
+        var step3 = document.getElementById("step3");
+        var step4 = document.getElementById("step4");
+        step2.style.display = "none";
+        step3.style.display = "none";
+        step4.style.display = "none";
+    });
+
+    function goForward() {
+        if (currentPage == 0) {
+            var missingFields = "";
+
+            // check that required fields are filled in
+            if (document.getElementById("Address").value == "") {
+                missingFields += "\u2022 Address\n ";
+            }
+            if (document.getElementById("City").value == "") {
+                missingFields += "\u2022 City\n ";
+            }
+            if (document.getElementById("ZipCode").value == "") {
+                missingFields += "\u2022 Zip Code\n ";
+            }
+            if (document.getElementById("DateOfBirth").value == "") {
+                missingFields += "\u2022 Date of Birth\n ";
+            }
+            if (document.getElementById("SocialSecurity").value == "") {
+                missingFields += "\u2022 Social Security Number\n ";
+            }
+
+            if (missingFields === "") {
+                // check if DateOfBirth is 18 years or older
+                var dob = new Date(document.getElementById("DateOfBirth").value);
+                var today = new Date();
+                var age = today.getFullYear() - dob.getFullYear();
+                var m = today.getMonth() - dob.getMonth();
+                if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+                    age--;
+                }
+                if (age >= 18) {
+
+                    // check if SocialSecurity field has at least 9 digits
+                    if (document.getElementById("SocialSecurity").value.length >= 9) {
+
+                        step1.style.display = "none";
+                        step2.style.display = "block";
+                        currentPage++;
+                        stepNumber.textContent = 2;
+                        document.getElementById("StatusBarStep").style.width = "25%";
+                    } else {
+                        alert("Social Security Number must be at least 9 digits.")
+                    }
+                } else {
+                    alert("You must be 18 years or older to proceed.")
+                }
+            } else {
+                alert("Please fill in the following required fields:" + "\n" + missingFields.slice(0, -2));
+            }
+        }
+        else if (currentPage == 1) {
+            if (document.getElementById("AccreditationStatus").value != "") {
+
+                step2.style.display = "none";
+                step3.style.display = "block";
+                currentPage++;
+                stepNumber.textContent = 3;
+                document.getElementById("StatusBarStep").style.width = "75%";
+            }
+            else {
+                alert("Please fill in required fields.")
+            }
+
+        }
+        else if (currentPage == 2) {
+            
+
+        }
+    }
+
+    function goBack() {
+        if (currentPage == 1) {
+            step1.style.display = "block";
+            step2.style.display = "none";
+            currentPage--;
+            stepNumber.textContent = 1;
+            document.getElementById("StatusBarStep").style.width = "0%";
+
+        }
+        else if (currentPage == 2) {
+            step2.style.display = "block";
+            step3.style.display = "none";
+            currentPage--;
+            stepNumber.textContent = 2;
+            document.getElementById("StatusBarStep").style.width = "25%";
+
+        }
+        else if (currentPage == 3) {
+            step3.style.display = "block";
+            step4.style.display = "none";
+            currentPage--;
+            stepNumber.textContent = 3;
+            document.getElementById("StatusBarStep").style.width = "50%";
+
+        }
+    }
+</script>
